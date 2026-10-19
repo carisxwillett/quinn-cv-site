@@ -59,6 +59,7 @@ body{background:var(--ink);color:var(--paper);font-family:var(--hud);font-size:1
 #intro.off{opacity:0}
 #intro .name{font-family:var(--display);font-size:clamp(54px,11vw,150px);line-height:.9;letter-spacing:.01em;color:var(--paper);text-transform:uppercase}
 #intro .role{font-family:var(--display);font-size:clamp(20px,3.4vw,40px);color:var(--pink);text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
+#intro .tag.snd{font-size:clamp(12px,1.4vw,14px);color:var(--sun);margin-top:14px}
 #intro .tag{font-weight:600;font-size:clamp(15px,1.8vw,19px);letter-spacing:.2em;text-transform:uppercase;margin-top:10px;color:var(--paper)}
 
 /* scroll hint */
@@ -154,7 +155,7 @@ button.small{padding:5px 8px;font-size:12px}
 <div id="place" class="hud stroke"><div class="where" id="where">Harbor Freeway</div><div class="chap" id="chap">Chapter 1 · The Pickup</div></div>
 <div id="stats" class="hud stroke"><div id="clock">6:12 PM</div><div id="uptime">UPTIME 99.99%</div><div id="stars">★★★★☆<small>On-call level</small></div></div>
 <div id="mapwrap" class="hud"><canvas id="minimap" width="380" height="380"></canvas></div>
-<div id="intro" class="hud stroke"><div class="name" id="introName">Quinn</div><div class="role" id="introRole">Systems Administrator</div><div class="tag">A drive through Los Angeles</div></div>
+<div id="intro" class="hud stroke"><div class="name" id="introName">Quinn</div><div class="role" id="introRole">Systems Administrator</div><div class="tag">A drive through Los Angeles</div><div class="tag snd">Click or tap anywhere for engine and radio</div></div>
 <div id="banner" class="hud stroke"><div class="n" id="bannerN">Chapter 2</div><div class="t" id="bannerT">Player Profile</div><div class="r" id="bannerR"></div></div>
 <div id="subs" class="hud stroke" aria-live="polite"></div>
 <div id="hint" class="hud stroke"><span class="mouse"></span><span>Scroll to drive</span></div>
@@ -168,6 +169,7 @@ button.small{padding:5px 8px;font-size:12px}
 <section id="cv" hidden aria-label="Quinn's CV"></section>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 /* =====================================================================
    EDIT ME: everything Quinn-specific lives in this object.
@@ -180,7 +182,7 @@ const CV = {
   tagline: "Microsoft 365, identity and infrastructure",
   location: "Staines-upon-Thames, UK",
   years: "8",
-  dreamCar: "Ford Mustang",
+  dreamCar: "Range Rover Sport SVR",
   drives: "2019 MG ZS EV",
   friend: "Dani",
   summary: "Eight years looking after IT end to end at Emanuel School, from Entra ID and Exchange Online through to servers, firewalls and fibre. I'm the person the team escalates to, I work with the Head of IT to scope and test changes before they go live, and I've contributed to a tender from technical specification to supplier evaluation. Next, I want to focus that breadth on Microsoft 365, improving the identity, email and collaboration services people rely on every day.",
@@ -284,17 +286,36 @@ function wrapLines(g, text, maxW) {
 }
 
 (async function main() {
+  /* photo textures (Adobe Stock) and the two rigged characters load alongside the fonts */
+  const loadImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; setTimeout(() => res(null), 20000); });
+  const loadGLB = src => new Promise(res => { if (!THREE.GLTFLoader) return res(null); new THREE.GLTFLoader().load(src, res, undefined, () => res(null)); setTimeout(() => res(null), 30000); });
+  const TEX_NAMES = ["asphalt", "paving", "grass", "sand", "facade_warm", "facade_grid", "facade_glass"];
+  const assetsP = Promise.all([Promise.all(TEX_NAMES.map(n => loadImg("tex/" + n + ".jpg"))), Promise.all(["models/dani.json", "models/driver.json"].map(loadGLB))]);
   try {
     await Promise.race([Promise.all([
       document.fonts.load("64px Anton"), document.fonts.load('700 40px "Barlow Condensed"'),
       document.fonts.load('600 40px "Barlow Condensed"'), document.fonts.load("800 40px Overpass")
     ]), new Promise(r => setTimeout(r, 2500))]);
   } catch (e) { }
+  const [imgs, GLB] = await assetsP;
+  const IMG = Object.fromEntries(TEX_NAMES.map((n, i) => [n, imgs[i]]));
 
   /* ------------------------------ renderer ------------------------------ */
   const canvas = document.getElementById("scene");
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  function photo(name, rx = 1, ry = 1, fallback = "#777777") {
+    const t = IMG[name] ? new THREE.Texture(IMG[name]) : canvasTex(4, 4, g => { g.fillStyle = fallback; g.fillRect(0, 0, 4, 4); });
+    t.wrapS = t.wrapT = THREE.MirroredRepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = aniso; t.needsUpdate = true; return t;
+  }
+  // multiplies a photo in at its own tiling on top of a material's map (mean brightness divided out so the base colour holds)
+  function withDetail(mat, tex, sx, sy, mean) {
+    mat.onBeforeCompile = sh => { sh.uniforms.tDetail = { value: tex };
+      sh.fragmentShader = "uniform sampler2D tDetail;\n" + sh.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
+        diffuseColor.rgb *= texture2D(tDetail, vUv*vec2(${sx.toFixed(2)}, ${sy.toFixed(2)})).rgb/${mean.toFixed(3)};`); };
+    return mat;
+  }
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 8000);
   function resize() {
@@ -365,13 +386,14 @@ function wrapLines(g, text, maxW) {
   const COAST_Z = -1866;
 
   /* ------------------------------ ground, road, sidewalks ------------------------------ */
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshLambertMaterial({ color: 0x6e6248 }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000), new THREE.MeshLambertMaterial({ color: 0xa08c6a, map: photo("grass", 900, 900, "#8a7c58") }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.06; scene.add(ground);
 
+  // lane paint, tyre polish and patch repairs on a canvas; the asphalt grain comes from the photo (withDetail)
   const roadTex = canvasTex(512, 1024, (g, w, h) => {
-    g.fillStyle = "#2a292f"; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 9000; i++) { const v = 30 + Math.random() * 40; g.fillStyle = `rgba(${v},${v},${v + 6},.5)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
-    g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(70, 0, 60, h); g.fillRect(320, 0, 60, h);
+    g.fillStyle = "#43424a"; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? "0,0,0" : "120,118,124"},${.05 + Math.random() * .08})`; g.fillRect(Math.random() * w, Math.random() * h, 30 + Math.random() * 140, 10 + Math.random() * 60); }
+    g.fillStyle = "rgba(0,0,0,.2)"; g.fillRect(70, 0, 60, h); g.fillRect(320, 0, 60, h);
     g.fillStyle = "#e8b931"; g.fillRect(246, 0, 6, h); g.fillRect(260, 0, 6, h);
     g.fillStyle = "#e9e6dd"; g.fillRect(14, 0, 7, h); g.fillRect(491, 0, 7, h);
     for (let y = 0; y < h; y += 256) { g.fillRect(126, y, 6, 150); g.fillRect(382, y, 6, 150); }
@@ -393,12 +415,13 @@ function wrapLines(g, text, maxW) {
     const m = new THREE.Mesh(g, mat); scene.add(m); return m;
   }
   const iRoadEnd = Math.floor(ROAD_END * N);
-  ribbon(0, iRoadEnd, -8, 8, 0.02, new THREE.MeshLambertMaterial({ map: roadTex }));
-  const walkMat = new THREE.MeshLambertMaterial({ color: 0x9c9388 });
-  ribbon(0, iRoadEnd, 8, 12, 0.16, walkMat); ribbon(0, iRoadEnd, -12, -8, 0.16, walkMat);
+  const asphalt = photo("asphalt");
+  ribbon(0, iRoadEnd, -8, 8, 0.02, withDetail(new THREE.MeshLambertMaterial({ map: roadTex }), asphalt, 6, 8, .5));
+  const walkMat = new THREE.MeshLambertMaterial({ color: 0xe8dccb, map: photo("paving", 1, 1, "#9c9388") });
+  ribbon(0, iRoadEnd, 8, 12, 0.16, walkMat, 4); ribbon(0, iRoadEnd, -12, -8, 0.16, walkMat, 4);
   const curbMat = new THREE.MeshLambertMaterial({ color: 0xc9c2b4 });
   ribbon(0, iRoadEnd, 7.8, 8.2, 0.17, curbMat); ribbon(0, iRoadEnd, -8.2, -7.8, 0.17, curbMat);
-  ribbon(iRoadEnd - 2, N, -24, 14, 0.025, new THREE.MeshLambertMaterial({ color: 0x3b3a42 }));
+  ribbon(iRoadEnd - 2, N, -24, 14, 0.025, new THREE.MeshLambertMaterial({ color: 0x6c6a72, map: photo("asphalt", 16, 1, "#3b3a42") }), 2.4);
   // parking lot stripes
   const stripeMat = new THREE.MeshBasicMaterial({ color: 0xd8d4c8 });
   for (let k = 0; k < 9; k++) {
@@ -408,7 +431,7 @@ function wrapLines(g, text, maxW) {
   }
 
   /* ocean + sand */
-  const sand = new THREE.Mesh(new THREE.PlaneGeometry(1800, 60), new THREE.MeshLambertMaterial({ color: 0xd9bf92 }));
+  const sand = new THREE.Mesh(new THREE.PlaneGeometry(1800, 60), new THREE.MeshLambertMaterial({ color: 0xfff0dc, map: photo("sand", 150, 5, "#d9bf92") }));
   sand.rotation.x = -Math.PI / 2; sand.position.set(200, 0.0, COAST_Z - 26); scene.add(sand);
   const oceanU = { uTime: { value: 0 }, uSun: { value: sunDir }, uHor: skyU.uHor, uMid: skyU.uMid, uNight: skyU.uNight };
   const ocean = new THREE.Mesh(new THREE.PlaneGeometry(14000, 7000, 1, 1), new THREE.ShaderMaterial({
@@ -461,6 +484,8 @@ function wrapLines(g, text, maxW) {
   /* ------------------------------ buildings (one instanced mesh, windows in the shader) ------------------------------ */
   const bGeo = new THREE.BoxGeometry(1, 1, 1); bGeo.translate(0, 0.5, 0);
   const bU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSun: { value: sunDir }, uSunCol: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() }, uNight: { value: 0 } }]);
+  // photo facades: warm stucco blocks with windows, and two kinds of curtain-wall glass for the towers
+  Object.assign(bU, { tWarm: { value: photo("facade_warm", 1, 1, "#c9a47f") }, tGrid: { value: photo("facade_grid", 1, 1, "#7b8ca2") }, tGlass: { value: photo("facade_glass", 1, 1, "#4a5a70") } });
   const bMat = new THREE.ShaderMaterial({
     uniforms: bU, fog: true,
     vertexShader: `attribute vec3 aColor; attribute float aSeed; attribute float aTower;
@@ -477,7 +502,7 @@ function wrapLines(g, text, maxW) {
         #include <logdepthbuf_vertex>
         #include <fog_vertex>
       }`,
-    fragmentShader: `uniform vec3 uSun, uSunCol, uAmb; uniform float uNight;
+    fragmentShader: `uniform vec3 uSun, uSunCol, uAmb; uniform float uNight; uniform sampler2D tWarm, tGrid, tGlass;
       varying vec3 vN; varying vec3 vLP; varying vec3 vC; varying float vSeed; varying vec3 vLN; varying float vTower;
       #include <common>
       #include <fog_pars_fragment>
@@ -490,17 +515,29 @@ function wrapLines(g, text, maxW) {
         vec3 col = vC*(uAmb + uSunCol*diff);
         if (abs(vLN.y) < 0.5) {
           float hc = abs(vLN.x) > 0.5 ? vLP.z : vLP.x;
-          vec2 cs = vTower > 0.5 ? vec2(2.0, 3.6) : vec2(3.2, 3.8);
-          vec2 cell = vec2(hc, vLP.y)/cs; vec2 f = fract(cell); vec2 id = floor(cell);
-          float win = vTower > 0.5 ? step(0.08,f.x)*step(f.x,0.92)*step(0.18,f.y)*step(f.y,0.88)
-                                   : step(0.22,f.x)*step(f.x,0.78)*step(0.3,f.y)*step(f.y,0.78);
-          win *= step(0.6, id.y);
-          float lit = step(0.62 - uNight*0.3, h2(id + vec2(vSeed*17.3, vLN.x*3.0+vLN.z*7.0)));
-          vec3 glass = mix(vec3(0.16,0.2,0.28), vec3(0.5,0.58,0.7), 0.35 + 0.4*diff) * (uAmb + uSunCol*0.5);
-          vec3 lc = mix(vec3(1.0,0.78,0.45), vec3(0.8,0.88,1.0), h2(id+3.1));
-          col = mix(col, glass + lc*lit*uNight*1.3, win);
+          vec2 fp = vec2(hc + vSeed*37.0, vLP.y);
+          vec2 tuv; vec2 cid; float win;
+          if (vTower > 0.5) {
+            bool grid = fract(vSeed*7.13) > 0.45;
+            tuv = grid ? fp/vec2(16.0, 16.0) : fp/vec2(26.0, 13.0);
+            vec3 ph = grid ? texture2D(tGrid, tuv).rgb : texture2D(tGlass, tuv).rgb;
+            cid = floor(tuv*vec2(8.0, grid ? 8.0 : 5.0)); win = 1.0;
+            vec3 reflTint = mix(vec3(1.0, 0.66, 0.55), vec3(0.4, 0.34, 0.62), uNight);
+            vec3 glassC = mix(vC*(0.8 + (dot(ph, vec3(0.3, 0.59, 0.11)) - (grid ? 0.76 : 0.43))*0.9), ph, 0.12);
+            col = glassC*reflTint*(0.6 + 0.5*diff)*(uAmb*1.25 + uSunCol*0.45)*1.35;
+          } else {
+            tuv = fp/vec2(22.0, 22.0);
+            vec3 ph = texture2D(tWarm, tuv).rgb;
+            win = smoothstep(0.02, 0.2, ph.b - ph.r*0.55);
+            vec3 wall = vC*(0.42 + dot(ph, vec3(0.3, 0.59, 0.11))*1.2);
+            col = mix(wall, ph*vec3(0.8, 0.88, 1.0), win)*(uAmb + uSunCol*diff)*1.1;
+            cid = floor(tuv*vec2(8.0, 8.5));
+          }
+          float lit = step(0.62 - uNight*0.3, h2(cid + vec2(vSeed*17.3, vLN.x*3.0 + vLN.z*7.0)));
+          vec3 lc = mix(vec3(1.0, 0.78, 0.45), vec3(0.8, 0.88, 1.0), h2(cid + 3.1));
+          col += lc*lit*uNight*1.2*win*step(3.4, vLP.y);
           // ground floor shop band
-          col = mix(col, col*0.55 + vec3(1.0,0.5,0.3)*uNight*0.35*h2(vec2(vSeed,id.x)), (1.0-step(3.4, vLP.y))*(vTower>0.5?0.0:1.0));
+          col = mix(col, col*0.55 + vec3(1.0,0.5,0.3)*uNight*0.35*h2(vec2(vSeed,floor(hc/3.2))), (1.0-step(3.4, vLP.y))*(vTower>0.5?0.0:1.0));
         } else col *= 0.75;
         gl_FragColor = vec4(col, 1.0);
         #include <fog_fragment>
@@ -797,49 +834,119 @@ function wrapLines(g, text, maxW) {
   const tlMat = new THREE.PointsMaterial({ map: glowTex, size: 2.4, color: 0xfff1d0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
   const tlPts = new THREE.Points(tlGeo, tlMat); tlPts.frustumCulled = false; scene.add(tlPts);
 
-  /* ------------------------------ the Mustang (Quinn's dream car) ------------------------------ */
-  const MUSTANG_P = .418;
-  const mustang = new THREE.Group(); mustang.visible = false; scene.add(mustang);
-  const muGuy = {};
-  { const paint = withEnv(new THREE.MeshStandardMaterial({ color: 0xf5b800, roughness: .25, metalness: .15 })), black = new THREE.MeshStandardMaterial({ color: 0x111114, roughness: .4 });
-    const add = (m, x, y, z) => { m.position.set(x, y, z); mustang.add(m); return m; };
-    add(new THREE.Mesh(new THREE.BoxGeometry(1.96, .55, 4.8), paint), 0, .62, 0);
-    const hoodG = new THREE.BoxGeometry(1.9, .14, 1.9); add(new THREE.Mesh(hoodG, paint), 0, .93, -1.35).rotation.x = -.06;
-    add(new THREE.Mesh(new THREE.BoxGeometry(1.9, .14, 1.2), paint), 0, .92, 1.75);
-    [-.22, .22].forEach(x => { add(new THREE.Mesh(new THREE.BoxGeometry(.18, .01, 4.6), black), x, 1.005, 0); });
-    add(new THREE.Mesh(new THREE.BoxGeometry(1.5, .26, .06), black), 0, .62, -2.42);
-    [-.62, .62].forEach(x => { add(new THREE.Mesh(new THREE.BoxGeometry(.4, .08, .05), new THREE.MeshBasicMaterial({ color: 0xfff1d0 })), x, .8, -2.42); add(new THREE.Mesh(new THREE.BoxGeometry(.5, .14, .05), new THREE.MeshBasicMaterial({ color: 0xd01818 })), x, .82, 2.42); });
-    const ws = add(new THREE.Mesh(new THREE.PlaneGeometry(1.7, .5), new THREE.MeshStandardMaterial({ color: 0x88aacc, transparent: true, opacity: .25, side: THREE.DoubleSide })), 0, 1.22, -.42); ws.rotation.x = -.9;
-    add(new THREE.Mesh(new THREE.BoxGeometry(1.76, .05, .05), black), 0, 1.42, -.28);
-    const wheelG = new THREE.CylinderGeometry(.38, .38, .3, 18); wheelG.rotateZ(Math.PI / 2);
-    [[-.95, 1.5], [.95, 1.5], [-.95, -1.5], [.95, -1.5]].forEach(([x, z]) => add(new THREE.Mesh(wheelG, black), x, .38, z));
-    const nBefore = mustang.children.length;
-    const seatM = new THREE.MeshStandardMaterial({ color: 0x1b1b1f, roughness: .6 });
-    [-.4, .4].forEach(x => { add(new THREE.Mesh(new THREE.BoxGeometry(.48, .7, .12), seatM), x, 1.05, .55).rotation.x = .2; });
-    // the cool guy
-    const skin2 = new THREE.MeshStandardMaterial({ color: 0xb87a55, roughness: .5 }), jacket = new THREE.MeshStandardMaterial({ color: 0x1a1a1d, roughness: .45, metalness: .2 });
-    add(new THREE.Mesh(new THREE.CylinderGeometry(.17, .15, .48, 14), jacket), -.4, 1.12, .38);
-    [-1, 1].forEach(s2 => add(new THREE.Mesh(new THREE.SphereGeometry(.08, 14, 10), jacket), -.4 + s2 * .17, 1.32, .38));
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .5, 10), jacket); arm.rotation.set(-1.0, 0, .2); add(arm, -.52, 1.2, .08);
-    const sw = new THREE.Mesh(new THREE.TorusGeometry(.17, .02, 8, 24), black); sw.rotation.x = -.5; add(sw, -.4, 1.12, -.25);
-    const hg2 = new THREE.Group(); hg2.position.set(-.4, 1.56, .36); mustang.add(hg2); muGuy.head = hg2;
-    const hd = new THREE.Mesh(new THREE.SphereGeometry(.105, 24, 18), skin2); hd.scale.set(.92, 1.12, 1); hg2.add(hd);
-    const hair2 = new THREE.Mesh(new THREE.SphereGeometry(.112, 24, 12, 0, Math.PI * 2, 0, Math.PI * .5), new THREE.MeshStandardMaterial({ color: 0x0e0b09, roughness: .25, metalness: .3 }));
-    hair2.scale.set(.96, 1.05, 1.08); hair2.rotation.x = .3; hair2.position.y = .02; hg2.add(hair2);
-    const quiff = new THREE.Mesh(new THREE.SphereGeometry(.06, 14, 10), hair2.material); quiff.scale.set(1.4, .7, 1); quiff.position.set(0, .1, -.06); hg2.add(quiff);
-    // aviators pushed up on the forehead so you can see the wink
-    const shadeM = withEnv(new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: .05, metalness: 1 }));
-    [-1, 1].forEach(s2 => { const l = new THREE.Mesh(new THREE.BoxGeometry(.065, .035, .01), shadeM); l.position.set(s2 * .04, .085, -.088); l.rotation.x = -.5; hg2.add(l); });
-    muGuy.eyes = [-1, 1].map(s2 => { const e = new THREE.Group(); e.position.set(s2 * .036, .02, -.095); hg2.add(e);
-      const w = new THREE.Mesh(new THREE.SphereGeometry(.014, 12, 8), new THREE.MeshBasicMaterial({ color: 0xf2efe8 })); w.scale.set(1.3, 1, .6); e.add(w);
-      const p = new THREE.Mesh(new THREE.SphereGeometry(.007, 8, 6), new THREE.MeshBasicMaterial({ color: 0x1a120c })); p.position.z = -.008; e.add(p);
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(.03, .006, .006), hair2.material); brow.position.y = .022; e.add(brow); return e; });
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(.016, .045, 8), skin2); nose.rotation.x = -Math.PI / 2 - .3; nose.position.set(0, -.012, -.11); hg2.add(nose);
-    const smile = new THREE.Mesh(new THREE.TorusGeometry(.025, .005, 6, 16, Math.PI), new THREE.MeshBasicMaterial({ color: 0x5e1f1f })); smile.rotation.z = Math.PI; smile.position.set(.004, -.048, -.098); hg2.add(smile); muGuy.smile = smile;
-    const chin = new THREE.Mesh(new THREE.SphereGeometry(.03, 10, 8), hair2.material); chin.scale.set(1, .5, .6); chin.position.set(0, -.085, -.07); hg2.add(chin);
-    mustang.children.slice(nBefore).forEach(c => c.position.y -= .42); // sits low in the convertible
+  /* ------------------------------ rigged characters (posed from bone rotations in model space) ------------------------------ */
+  const AX = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) }, _qa = new THREE.Quaternion(), _qp = new THREE.Quaternion();
+  function rotW(b, axis, deg) { b.parent.getWorldQuaternion(_qp); _qa.setFromAxisAngle(axis, deg * Math.PI / 180); b.quaternion.premultiply(_qp.clone().invert().multiply(_qa).multiply(_qp)); b.updateMatrixWorld(true); }
+  function character(gltf) {
+    const root = gltf.scene, B = {};
+    root.traverse(o => {
+      if (o.isBone) B[o.name.replace(/^mixamorig:?/, "")] = o;
+      if (o.isMesh) { o.frustumCulled = false; [].concat(o.material).forEach(m => { ["map", "emissiveMap"].forEach(k => { if (m[k]) m[k].encoding = THREE.LinearEncoding; }); m.needsUpdate = true; }); }
+    });
+    root.updateMatrixWorld(true);
+    // head turns: yaw about the model's up axis and pitch about its side axis, split between neck and head
+    const ctl = ["Neck", "Head"].filter(n => B[n]).map((n, i) => { const b = B[n]; b.parent.getWorldQuaternion(_qp); const inv = _qp.clone().invert();
+      return { b, rest: b.quaternion.clone(), up: AX.y.clone().applyQuaternion(inv), side: AX.x.clone().applyQuaternion(inv), k: i ? .6 : .4 }; });
+    const qy = new THREE.Quaternion(), qx = new THREE.Quaternion();
+    const turn = (yaw, pitch) => ctl.forEach(c => { qy.setFromAxisAngle(c.up, yaw * c.k); qx.setFromAxisAngle(c.side, pitch * c.k); c.b.quaternion.copy(qy).multiply(qx).multiply(c.rest); });
+    return { root, B, turn };
   }
-  const MU_LINES = [[.3, 2.0, "friend", "Is that... a Mustang?"], [3.5, 4.8, "friend", "Did he just wink at you?"], [5.0, 6.4, "Quinn", "One day. ONE DAY."], [6.4, 8.2, "friend", "Easy. The MG didn't do anything."]];
+  // seats a posed character: hips land on `at` (in the parent's space), facing the parent's -Z
+  function seat(ch, parent, at) {
+    ch.root.updateMatrixWorld(true); const hp = ch.B.Hips.getWorldPosition(new THREE.Vector3());
+    ch.root.position.sub(hp); const wrap = new THREE.Group(); wrap.add(ch.root); wrap.rotation.y = Math.PI; wrap.position.copy(at); parent.add(wrap); return wrap;
+  }
+
+  /* ------------------------------ the Range Rover Sport SVR (Quinn's dream car) ------------------------------ */
+  const SVR_P = .418;
+  const svr = new THREE.Group(); svr.visible = false; scene.add(svr);
+  const svrGuy = { turn: () => { }, lid: null, smile: [] };
+  { const paint = withEnv(new THREE.MeshStandardMaterial({ color: 0xb3141e, roughness: .28, metalness: .3 })); // Firenze Red
+    const gloss = withEnv(new THREE.MeshStandardMaterial({ color: 0x0c0c0f, roughness: .12, metalness: .7, side: THREE.DoubleSide })); // black roof + trim
+    const glassM = withEnv(new THREE.MeshStandardMaterial({ color: 0x050608, roughness: .04, metalness: .95, side: THREE.DoubleSide }));
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: .9 });
+    const satin = withEnv(new THREE.MeshStandardMaterial({ color: 0x7c8088, roughness: .3, metalness: .35 }));
+    const cabinM = new THREE.MeshStandardMaterial({ color: 0x1b1719, roughness: .75 });
+    const lightW = new THREE.MeshBasicMaterial({ color: 0xf4f7ff }), lightR = new THREE.MeshBasicMaterial({ color: 0xe0141c });
+    const add = (m, x = 0, y = 0, z = 0) => { m.position.set(x, y, z); svr.add(m); return m; };
+    const bx = (w, h, d, mat, x, y, z) => add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat), x, y, z);
+    // side profiles are drawn with x = forward, then turned so forward is -Z
+    const side = (g, w) => { g.rotateY(Math.PI / 2); g.translate(-w / 2, 0, 0); return g; };
+    const body = new THREE.Shape();
+    body.moveTo(2.30, .40); body.lineTo(2.44, .55); body.quadraticCurveTo(2.50, .80, 2.40, .93); body.quadraticCurveTo(2.25, 1.03, 1.9, 1.04);
+    body.lineTo(.95, 1.14); body.lineTo(-1.9, 1.19); body.quadraticCurveTo(-2.36, 1.19, -2.42, 1.0); body.lineTo(-2.46, .55); body.quadraticCurveTo(-2.45, .40, -2.3, .38);
+    body.lineTo(-1.93, .38); body.absarc(-1.46, .40, .47, Math.PI, 0, true); body.lineTo(.99, .38); body.absarc(1.46, .40, .47, Math.PI, 0, true); body.lineTo(2.30, .40);
+    add(new THREE.Mesh(side(new THREE.ExtrudeGeometry(body, { depth: 1.84, bevelEnabled: true, bevelThickness: .07, bevelSize: .06, bevelSegments: 4, curveSegments: 20 }), 1.84), paint));
+    // greenhouse: the roof, screens and pillars in gloss black; its flat sides are left open for the windows
+    const gh = new THREE.Shape(); gh.moveTo(1.02, 1.12); gh.lineTo(.12, 1.76); gh.quadraticCurveTo(0, 1.82, -.2, 1.82); gh.lineTo(-1.78, 1.8); gh.quadraticCurveTo(-1.97, 1.78, -2.06, 1.66); gh.lineTo(-2.3, 1.19); gh.lineTo(1.02, 1.12);
+    add(new THREE.Mesh(side(new THREE.ExtrudeGeometry(gh, { depth: 1.6, bevelEnabled: true, bevelThickness: .03, bevelSize: .03, bevelSegments: 2, curveSegments: 12 }), 1.6), [new THREE.MeshBasicMaterial({ visible: false }), gloss]));
+    const winShape = pts => { const s = new THREE.Shape(); pts.forEach(([x, y], i) => i ? s.lineTo(x, y) : s.moveTo(x, y)); return s; };
+    const far = new THREE.Mesh(side(new THREE.ShapeGeometry(winShape([[1.04, 1.12], [.12, 1.78], [-1.8, 1.81], [-2.32, 1.18]])), 0), glassM); add(far, -.84, 0, 0);
+    // near side: the driver's passenger window is down, the rear one is up
+    add(new THREE.Mesh(side(new THREE.ShapeGeometry(winShape([[-.62, 1.16], [-.62, 1.79], [-1.8, 1.81], [-2.32, 1.18]])), 0), glassM), .84, 0, 0);
+    bx(.06, .66, .1, gloss, .83, 1.47, .64);
+    [-1, 1].forEach(s => {
+      bx(.04, .03, 3.2, satin, s * .85, 1.17, .55);                // window line trim
+      bx(.05, .16, 4.2, gloss, s * .99, .48, 0);                   // lower cladding
+      bx(.04, .1, .34, gloss, s * .99, .86, -1.32);                // fender vent
+      const mir = new THREE.Group(); mir.position.set(s * 1.0, 1.2, -.58); svr.add(mir);
+      const mb = new THREE.Mesh(new THREE.BoxGeometry(.24, .15, .1), gloss); mb.position.x = s * .1; mir.add(mb);
+      bx(.012, .02, .12, satin, s * .99, .97, -.15);                  // door handles
+      bx(.012, .02, .12, satin, s * .99, .97, .8);
+    });
+    // nose: grille, slim LED lights, lettering across the bonnet edge
+    const grille = canvasTex(256, 64, (g, w, h) => { g.fillStyle = "#050506"; g.fillRect(0, 0, w, h); g.strokeStyle = "#2c2c33"; g.lineWidth = 2;
+      for (let y = 0; y < h; y += 8) for (let x = (y / 8) % 2 ? 6 : 0; x < w; x += 12) { g.beginPath(); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g.lineTo(x + Math.cos(a) * 4.5, y + Math.sin(a) * 4.5); } g.closePath(); g.stroke(); } });
+    add(new THREE.Mesh(new THREE.PlaneGeometry(1.12, .28), new THREE.MeshStandardMaterial({ map: grille, roughness: .4, metalness: .5 })), 0, .8, -2.565).rotation.y = Math.PI;
+    bx(1.16, .03, .03, satin, 0, .95, -2.56);
+    const letters = canvasTex(512, 48, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = "#d9dbe0"; g.font = "700 34px 'Barlow Condensed'"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("R A N G E   R O V E R", w / 2, h / 2 + 2); });
+    const lt = add(new THREE.Mesh(new THREE.PlaneGeometry(.9, .085), new THREE.MeshBasicMaterial({ map: letters, transparent: true })), 0, 1.0, -2.44); lt.rotation.set(-.55, Math.PI, 0);
+    [-1, 1].forEach(s => {
+      bx(.46, .055, .03, lightW, s * .66, .9, -2.55); bx(.4, .012, .03, lightW, s * .64, .84, -2.55);
+      bx(.5, .2, .04, gloss, s * .64, .55, -2.56);                 // big intakes
+      bx(.42, .07, .04, lightR, s * .7, 1.0, 2.53);                 // tail lights
+      [-.06, .06].forEach(dx => { const ex = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .1, 16), satin); ex.rotation.x = Math.PI / 2; add(ex, s * (.5 + dx), .34, 2.5); });  // quad pipes
+    });
+    bx(.9, .03, .04, lightR, 0, 1.0, 2.53);
+    const svrBadge = canvasTex(128, 48, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = "#e9e9ee"; g.font = "800 34px Overpass"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("SVR", w / 2, h / 2 + 2); });
+    add(new THREE.Mesh(new THREE.PlaneGeometry(.18, .068), new THREE.MeshBasicMaterial({ map: svrBadge, transparent: true })), .5, .75, 2.535);
+    [-1, 1].forEach(s => { const b2 = add(new THREE.Mesh(new THREE.PlaneGeometry(.14, .052), new THREE.MeshBasicMaterial({ map: svrBadge, transparent: true })), s * .995, .84, -1.6); b2.rotation.y = s * Math.PI / 2; });
+    // 22-inch wheels with red Brembo-style calipers
+    const tyreG = new THREE.CylinderGeometry(.41, .41, .3, 32); tyreG.rotateZ(Math.PI / 2);
+    const rimG = new THREE.CylinderGeometry(.3, .3, .04, 32); rimG.rotateZ(Math.PI / 2);
+    const caliper = new THREE.MeshStandardMaterial({ color: 0xc8141c, roughness: .4 });
+    [[-1, -1.46], [1, -1.46], [-1, 1.46], [1, 1.46]].forEach(([s, z]) => {
+      const w = new THREE.Group(); w.position.set(s * .86, .41, z); svr.add(w);
+      w.add(new THREE.Mesh(tyreG, rubber)); const rim = new THREE.Mesh(rimG, new THREE.MeshStandardMaterial({ color: 0x1c1d21, roughness: .5 })); rim.position.x = s * .14; w.add(rim);
+      for (let k = 0; k < 10; k++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(.02, .27, .045), satin); const a = k * Math.PI / 5 + (k % 2 ? .1 : -.1);
+        sp.position.set(s * .165, Math.cos(a) * .145, Math.sin(a) * .145); sp.rotation.x = -a; w.add(sp); }
+      const hubc = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .03, 16), satin); hubc.rotation.z = Math.PI / 2; hubc.position.x = s * .175; w.add(hubc);
+      const cal = new THREE.Mesh(new THREE.BoxGeometry(.05, .18, .1), caliper); cal.position.set(s * .1, .12, z < 0 ? -.13 : .13); w.add(cal);
+      svr.userData.wheels = (svr.userData.wheels || []).concat(w);
+    });
+    // cabin you can see through the open window
+    bx(1.6, .32, .55, cabinM, 0, 1.0, -.72);
+    bx(1.6, .04, 3, cabinM, 0, .62, .35);
+    [-.4, .4].forEach(x => { const b3 = bx(.5, .78, .12, cabinM, x, 1.16, .62); b3.rotation.x = .14; bx(.5, .14, .55, cabinM, x, .78, .32); bx(.26, .2, .1, cabinM, x, 1.64, .7); });
+    const sw = add(new THREE.Mesh(new THREE.TorusGeometry(.18, .022, 10, 36), cabinM), -.4, 1.22, -.28); sw.rotation.x = -.45;
+    if (GLB[1]) {
+      const ch = character(GLB[1]), B = ch.B;
+      ch.root.traverse(o => { if (o.isMesh && /Outfit_(Top|Bottom)/.test(o.name)) o.material.color.setScalar(.22); });   // black suit, keep the hat
+      for (const [sd, k] of [["Left", 1], ["Right", -1]]) {
+        rotW(B[sd + "UpLeg"], AX.x, -82); rotW(B[sd + "Leg"], AX.x, 78);
+        rotW(B[sd + "Arm"], AX.z, k * -8); rotW(B[sd + "Arm"], AX.x, -52); rotW(B[sd + "ForeArm"], AX.y, k * 18); rotW(B[sd + "ForeArm"], AX.x, -38);
+      }
+      rotW(B.Spine, AX.x, -6);
+      // a skin-toned lid over his right eye for the wink
+      const eye = B.RightEye || B.LeftEye, head = B.Head, ep = eye.getWorldPosition(new THREE.Vector3());
+      const lid = new THREE.Mesh(new THREE.SphereGeometry(.0168, 20, 14), new THREE.MeshStandardMaterial({ color: 0xd99a80, roughness: .6 }));
+      lid.position.copy(head.worldToLocal(ep)); lid.visible = false; head.add(lid); svrGuy.lid = lid;
+      ch.root.traverse(o => { if (o.morphTargetDictionary && "mouthSmile" in o.morphTargetDictionary) svrGuy.smile.push([o, o.morphTargetDictionary.mouthSmile]); });
+      svrGuy.turn = ch.turn;
+      seat(ch, svr, new THREE.Vector3(-.4, .9, .3));
+    }
+  }
+  const MU_LINES = [[.3, 2.0, "friend", "Is that... a Range Rover Sport SVR?"], [3.5, 4.8, "friend", "Did he just wink at you?"], [5.0, 6.4, "Quinn", "One day. ONE DAY."], [6.4, 8.2, "friend", "Easy. The MG didn't do anything."]];
   const mu = { on: false, done: false, t0: 0 };
 
   /* ------------------------------ our car ------------------------------ */
@@ -849,7 +956,7 @@ function wrapLines(g, text, maxW) {
     dash: new THREE.MeshStandardMaterial({ color: 0x1c1a20, roughness: .8, metalness: .05 }),
     trim: withEnv(new THREE.MeshStandardMaterial({ color: 0x2b2830, roughness: .35, metalness: .7 })),
     chrome: withEnv(new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: .12, metalness: 1 })),
-    leather: new THREE.MeshStandardMaterial({ color: 0x7a4126, roughness: .62 }),
+    leather: new THREE.MeshStandardMaterial({ color: 0x2e2a2c, roughness: .55 }),
     wheel: new THREE.MeshStandardMaterial({ color: 0x151315, roughness: .55 }),
     stitch: new THREE.MeshBasicMaterial({ color: 0xc98a55 }),
     paint: withEnv(new THREE.MeshStandardMaterial({ color: 0x1f5fa8, roughness: .2, metalness: .55, envMapIntensity: 1.2 })), // MG Clipper Blue
@@ -912,10 +1019,19 @@ function wrapLines(g, text, maxW) {
     hg.computeVertexNormals(); const hood = new THREE.Mesh(hg, M.paint); hood.position.set(0, 0, -1.85); rig.add(hood);
     [-.38, .22].forEach(x => { const w = rbox(.6, .012, .02, M.dash, V(x, .98, -1.18)); w.rotation.y = .12; rig.add(w); });
     // passenger seat
-    const seat = new THREE.Group(); seat.position.set(.45, 0, .07); rig.add(seat);
-    seat.add(rbox(.52, .14, .6, M.leather, V(0, .5, -.12))); const back = rbox(.52, .78, .14, M.leather, V(0, .95, .2)); back.rotation.x = .16; seat.add(back);
-    seat.add(rbox(.28, .18, .1, M.leather, V(0, 1.44, .27)));
-    for (let k = 0; k < 4; k++) seat.add(rbox(.5, .005, .005, M.stitch, V(0, .7 + k * .14, .12 + k * .023)));
+    const seat = new THREE.Group(); seat.position.set(.45, 0, .14); rig.add(seat);
+    // soft panels: rounded outlines with deep bevels, plus side bolsters angled in
+    const rr2 = (w, h, r) => { const sh = new THREE.Shape(), x = w / 2, y = h / 2; sh.moveTo(-x + r, -y); sh.lineTo(x - r, -y); sh.quadraticCurveTo(x, -y, x, -y + r); sh.lineTo(x, y - r); sh.quadraticCurveTo(x, y, x - r, y);
+      sh.lineTo(-x + r, y); sh.quadraticCurveTo(-x, y, -x, y - r); sh.lineTo(-x, -y + r); sh.quadraticCurveTo(-x, -y, -x + r, -y); return sh; };
+    const pad = (w, h, d, r, b, pos, rx = 0, ry = 0) => { const g = new THREE.ExtrudeGeometry(rr2(w - 2 * b, h - 2 * b, r), { depth: d - 2 * b, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 5, curveSegments: 10 });
+      g.translate(0, 0, -(d - 2 * b) / 2); g.computeVertexNormals(); const m = new THREE.Mesh(g, M.leather); m.position.copy(pos); m.rotation.set(rx, ry, 0, "YXZ"); seat.add(m); return m; };
+    pad(.36, .12, .56, .05, .045, V(0, .5, -.12), -Math.PI / 2 + .04);
+    [-1, 1].forEach(s => pad(.1, .15, .55, .04, .045, V(s * .22, .54, -.12), -Math.PI / 2 + .04, s * .06));
+    pad(.38, .72, .1, .08, .04, V(0, .95, .2), .16);
+    [-1, 1].forEach(s => pad(.11, .66, .17, .05, .05, V(s * .225, .93, .18), .16, -s * .32));
+    pad(.27, .17, .1, .07, .04, V(0, 1.45, .31), .1);
+    [-.07, .07].forEach(x => seat.add(beam(V(x, 1.3, .3), V(x, 1.4, .31), .012, M.chrome)));
+    for (let k = 0; k < 4; k++) seat.add(rbox(.34, .005, .005, M.stitch, V(0, .7 + k * .14, .145 + k * .023)));
   }
   // steering wheel
   const wheelGrp = new THREE.Group(); wheelGrp.position.set(-.4, .84, -.47); wheelGrp.rotation.x = -.38; rig.add(wheelGrp);
@@ -933,87 +1049,25 @@ function wrapLines(g, text, maxW) {
       const arm = beam(V(s * .02, -.02, .03), V(s * .14, -.22, .38), .075, new THREE.MeshStandardMaterial({ color: 0x23252b, roughness: .9 })); hand.add(arm);
     }); }
 
-  // the friend
+  // Dani: a rigged 3D character posed in the passenger seat, arm out of the open window
   const pal = new THREE.Group(); pal.position.set(.45, 0, .02); rig.add(pal);
-  const skin = new THREE.MeshStandardMaterial({ color: 0xc68a63, roughness: .55 });
-  const shirtTex = canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = "#1e6e78"; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 26; i++) { const x = Math.random() * w, y = Math.random() * h, r = 8 + Math.random() * 12;
-      g.fillStyle = i % 3 ? "#f4e6c8" : "#ff7a59"; for (let k = 0; k < 5; k++) { g.beginPath(); g.ellipse(x + Math.cos(k * 1.256) * r * .6, y + Math.sin(k * 1.256) * r * .6, r * .5, r * .28, k * 1.256, 0, Math.PI * 2); g.fill(); } }
-    g.strokeStyle = "#2f8a4a"; g.lineWidth = 4; for (let i = 0; i < 14; i++) { const x = Math.random() * w, y = Math.random() * h; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 20, y - 10, x + 36, y + 6); g.stroke(); }
-  }); shirtTex.wrapS = shirtTex.wrapT = THREE.RepeatWrapping; shirtTex.repeat.set(2, 1);
-  const shirt = new THREE.MeshStandardMaterial({ map: shirtTex, roughness: .8 });
-  const jeans = new THREE.MeshStandardMaterial({ color: 0x2c3b5a, roughness: .9 });
-  const limb = (a, b, r1, r2, mat) => { const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, d.length(), 14), mat);
-    m.position.copy(a).add(b).multiplyScalar(.5); m.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); pal.add(m); return m; };
-  const ball = (p, r, mat, s = [1, 1, 1]) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), mat); m.position.copy(p); m.scale.set(...s); pal.add(m); return m; };
-  limb(V(-.1, .62, .02), V(-.1, .6, -.4), .085, .07, jeans); limb(V(.1, .62, .02), V(.1, .6, -.4), .085, .07, jeans);
-  limb(V(-.1, .6, -.4), V(-.1, .2, -.5), .065, .055, jeans); limb(V(.1, .6, -.4), V(.12, .2, -.5), .065, .055, jeans);
-  const torso = limb(V(0, .66, .08), V(0, 1.16, .14), .15, .17, shirt);
-  ball(V(0, .67, .06), .16, jeans, [1, .6, 1]);
-  ball(V(-.16, 1.13, .14), .075, shirt); ball(V(.16, 1.13, .14), .075, shirt);
-  limb(V(0, 1.16, .14), V(0, 1.27, .15), .05, .045, skin);
-  // right arm on the window sill
-  limb(V(.17, 1.12, .14), V(.36, .99, .02), .055, .05, shirt); limb(V(.36, .99, .02), V(.46, 1.03, -.26), .042, .036, skin); ball(V(.48, 1.04, -.3), .04, skin, [1, .8, 1.3]);
-  // left arm in the lap
-  limb(V(-.17, 1.12, .14), V(-.22, .84, .02), .055, .05, shirt); limb(V(-.22, .84, .02), V(-.08, .7, -.24), .042, .036, skin); ball(V(-.06, .69, -.27), .04, skin, [1, .8, 1.3]);
-
-  const headG = new THREE.Group(); headG.position.set(0, 1.36, .15); pal.add(headG);
-  { const hd = new THREE.Mesh(new THREE.SphereGeometry(.105, 32, 24), skin); hd.scale.set(.92, 1.1, 1); headG.add(hd);
-    [-1, 1].forEach(s => { const e = new THREE.Mesh(new THREE.SphereGeometry(.024, 12, 8), skin); e.scale.set(.5, 1, .8); e.position.set(s * .097, -.005, .01); headG.add(e); });
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(.016, .045, 10), skin); nose.rotation.x = -Math.PI / 2 - .3; nose.position.set(0, -.012, -.112); headG.add(nose);
-    const shade = new THREE.MeshStandardMaterial({ color: 0x0b0b10, roughness: .05, metalness: .9 }); envHolders.push(shade);
-    [-1, 1].forEach(s => { const l = new THREE.Mesh(new THREE.BoxGeometry(.068, .036, .012), shade); l.position.set(s * .04, .022, -.104); l.rotation.y = s * .18; headG.add(l);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(.006, .008, .1), M.chrome); arm.position.set(s * .084, .03, -.055); headG.add(arm); });
-    headG.add(box(.022, .008, .008, M.chrome, V(0, .03, -.11)));
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(.034, .007, .006), new THREE.MeshStandardMaterial({ color: 0x6b2a2a })); mouth.position.set(0, -.058, -.1); headG.add(mouth); headG.userData.mouth = mouth;
-    const hairMat = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: .7 });
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(.112, 32, 16, 0, Math.PI * 2, 0, Math.PI * .56), hairMat); cap.scale.set(.95, 1.1, 1.04); cap.rotation.x = .42; cap.position.set(0, .006, .006); headG.add(cap); }
-
-  // hair strands: instanced ribbons bent by wind in the vertex shader
-  const HAIR = 260;
-  const strandGeo = new THREE.PlaneGeometry(.017, 1, 1, 12); strandGeo.translate(0, -.5, 0);
-  const phases = new Float32Array(HAIR); for (let i = 0; i < HAIR; i++) phases[i] = Math.random();
-  strandGeo.setAttribute("aPhase", new THREE.InstancedBufferAttribute(phases, 1));
-  const hairU = { uTime: { value: 0 }, uStrength: { value: .2 }, uWind: { value: V(-.3, .1, 1).normalize() }, uLight: { value: 1 } };
-  const hair = new THREE.InstancedMesh(strandGeo, new THREE.ShaderMaterial({
-    uniforms: hairU, side: THREE.DoubleSide,
-    vertexShader: `uniform float uTime, uStrength; uniform vec3 uWind; attribute float aPhase; varying float vS; varying float vX;
-      #include <common>
-      #include <logdepthbuf_pars_vertex>
-      vec3 bend(vec3 rest, vec3 w, float s){ return normalize(mix(rest, w, clamp(uStrength*(0.15+1.05*s), 0.0, 0.93))); }
-      void main(){
-        float s = -position.y;
-        vec3 root = (instanceMatrix*vec4(0.,0.,0.,1.)).xyz;
-        vec3 rest = normalize(mat3(instanceMatrix)*vec3(0.,-1.,0.));
-        float L = length(mat3(instanceMatrix)*vec3(0.,1.,0.));
-        vec3 side = normalize(mat3(instanceMatrix)*vec3(1.,0.,0.));
-        float t = uTime + aPhase*20.0;
-        float fl = sin(t*9.0 + s*7.0) + 0.6*sin(t*15.0 + s*12.0 + aPhase*6.0);
-        vec3 w = normalize(uWind + vec3(0.0, 0.22*fl, 0.0) + side*0.35*cos(t*7.0+s*5.0)*uStrength);
-        vec3 dir = bend(rest, w, s*0.6);
-        vec3 p = root + side*position.x*(1.0-0.75*s) + dir*s*L;
-        vS = s; vX = position.x/0.0085;
-        gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0);
-        #include <logdepthbuf_vertex>
-      }`,
-    fragmentShader: `uniform float uLight; varying float vS; varying float vX;
-      #include <logdepthbuf_pars_fragment>
-      void main(){
-        #include <logdepthbuf_fragment>
-        vec3 c = mix(vec3(0.16,0.09,0.05), vec3(0.62,0.4,0.22), smoothstep(0.1,1.0,vS));
-        c *= (0.7 + 0.45*(1.0-abs(vX))) * uLight; gl_FragColor = vec4(c,1.0); }`
-  }), HAIR);
-  { const d = new THREE.Object3D();
-    for (let i = 0; i < HAIR; i++) {
-      const az = rr(-2.05, 2.05), el = Math.abs(az) > 1.4 ? rr(.25, 1.2) : rr(-.25, 1.35);
-      const rd = V(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
-      d.position.set(rd.x * .105 * .92 * 1.02, rd.y * .105 * 1.1 * 1.02, rd.z * .105 * 1.02);
-      const rest = rd.clone().multiplyScalar(.55).add(V(0, -1, .25)).normalize();
-      d.quaternion.setFromUnitVectors(V(0, -1, 0), rest); d.rotateY(rnd() * Math.PI);
-      const len = rr(.2, .36); d.scale.set(1, len, 1); d.updateMatrix(); hair.setMatrixAt(i, d.matrix);
-    } }
-  hair.frustumCulled = false; headG.add(hair);
+  const dani = { turn: () => { }, t: { value: 0 }, wind: { value: 0 } };
+  if (GLB[0]) {
+    const ch = character(GLB[0]), B = ch.B;
+    rotW(B.Spine, AX.x, -5); rotW(B.Spine1, AX.x, -3);
+    for (const [sd, k] of [["Left", 1], ["Right", -1]]) { rotW(B[sd + "UpLeg"], AX.x, -84); rotW(B[sd + "UpLeg"], AX.y, k * 6); rotW(B[sd + "Leg"], AX.x, 82); rotW(B[sd + "Foot"], AX.x, -12); }
+    rotW(B.LeftArm, AX.z, -72); rotW(B.LeftArm, AX.y, -28); rotW(B.LeftForeArm, AX.y, -75);
+    rotW(B.RightArm, AX.z, 50); rotW(B.RightArm, AX.y, 12); rotW(B.RightForeArm, AX.x, -70);
+    // her hair puffs sway in the wind from the open window
+    ch.root.traverse(o => { if (o.isMesh) o.material.onBeforeCompile = sh => {
+      sh.uniforms.uT = dani.t; sh.uniforms.uWind = dani.wind;
+      sh.vertexShader = "uniform float uT, uWind;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+        float hw = smoothstep(1.47, 1.62, position.y) * smoothstep(0.07, 0.15, abs(position.x)) * uWind;
+        transformed += vec3(sin(uT*6.3 + position.y*24.0)*0.012, sin(uT*8.1 + position.x*30.0)*0.007, -0.02 - 0.016*sin(uT*5.2 + position.x*40.0)) * hw;`);
+    }; });
+    dani.turn = ch.turn;
+    seat(ch, pal, new THREE.Vector3(0, .66, -.04));
+  }
 
   // headlights
   const headlight = new THREE.SpotLight(0xfff0d0, 0, 90, .5, .6, 1.2); headlight.position.set(0, .8, -2.8); headlight.target.position.set(0, 0, -30); car.add(headlight, headlight.target);
@@ -1046,10 +1100,11 @@ function wrapLines(g, text, maxW) {
   function drawScreen(ch, t) {
     const { g } = screenTex.userData, w = 512, h = 320, tr = TRACKS[ch % TRACKS.length];
     const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, "#1a0f2e"); gr.addColorStop(1, "#3b1240"); g.fillStyle = gr; g.fillRect(0, 0, w, h);
-    g.fillStyle = "#ffb347"; g.font = "700 30px 'Barlow Condensed'"; g.fillText("KQNN 101.1 FM · SYSADMIN SOUL", 28, 50);
+    g.fillStyle = "#ffb347"; g.font = "700 30px 'Barlow Condensed'"; g.fillText("KQNN 101.1 FM · BASS BOOSTED", 28, 50);
     g.fillStyle = "#f7efe4"; g.font = "48px Anton"; g.fillText(tr[0].toUpperCase(), 28, 130);
     g.fillStyle = "#bfb2cc"; g.font = "600 30px 'Barlow Condensed'"; g.fillText(tr[1], 28, 172);
-    for (let i = 0; i < 24; i++) { const v = .25 + .75 * Math.abs(Math.sin(t * 3 + i * 1.7) * Math.sin(t * 1.3 + i)); g.fillStyle = i % 4 ? "#ff5d8f" : "#ffb347"; g.fillRect(28 + i * 19, 280 - v * 70, 12, v * 70); }
+    const live = audio && audio.on; if (live) audio.an.getByteFrequencyData(audio.fd);
+    for (let i = 0; i < 24; i++) { const v = live ? .06 + .94 * audio.fd[Math.floor(1 + Math.pow(i / 24, 1.5) * 70)] / 255 : .25 + .75 * Math.abs(Math.sin(t * 3 + i * 1.7) * Math.sin(t * 1.3 + i)); g.fillStyle = i % 4 ? "#ff5d8f" : "#ffb347"; g.fillRect(28 + i * 19, 280 - v * 70, 12, v * 70); }
     g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(28, 296, 456, 5); g.fillStyle = "#f7efe4"; g.fillRect(28, 296, 456 * ((t * .02) % 1), 5);
     screenTex.needsUpdate = true;
   }
@@ -1141,36 +1196,132 @@ function wrapLines(g, text, maxW) {
   lookBtn.onclick = () => { lookToggle = !lookToggle; lookBtn.textContent = lookToggle ? "Eyes on the road" : "Look at " + CV.friend; };
   lookBtn.textContent = "Look at " + CV.friend;
 
-  /* engine sound */
-  let audio = null;
+  /* ------------------------------ sound: the MG's electric drive, tyres and wind, plus a bass-boosted radio ------------------------------ */
+  let audio = null, muted = false;
   function startAudio() {
     const ac = new (window.AudioContext || window.webkitAudioContext)();
-    const master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
-    const o1 = ac.createOscillator(), o2 = ac.createOscillator(); o1.type = "sine"; o2.type = "triangle";
-    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1800; const eg = ac.createGain(); eg.gain.value = .05;
-    o1.connect(lp); o2.connect(lp); lp.connect(eg); eg.connect(master); o1.start(); o2.start();
-    const nb = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), d = nb.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const ns = ac.createBufferSource(); ns.buffer = nb; ns.loop = true; const bp = ac.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 700; bp.Q.value = .6;
-    const wg = ac.createGain(); wg.gain.value = 0; ns.connect(bp); bp.connect(wg); wg.connect(master); ns.start();
-    master.gain.linearRampToValueAtTime(.5, ac.currentTime + 1);
-    return { ac, master, o1, o2, lp, wg, on: true };
+    const gain = v => { const g = ac.createGain(); g.gain.value = v; return g; };
+    const filt = (type, f, q = .7) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; };
+    const chain = (...n) => { for (let i = 0; i < n.length - 1; i++) n[i].connect(n[i + 1]); return n[n.length - 1]; };
+    const noise = (sec, brown) => { const b = ac.createBuffer(1, ac.sampleRate * sec, ac.sampleRate), d = b.getChannelData(0); let l = 0;
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; if (brown) { l = (l + .02 * w) / 1.02; d[i] = l * 3.5; } else d[i] = w; } return b; };
+    const loopSrc = buf => { const s = ac.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; };
+    const soft = k => { const c = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; c[i] = Math.tanh(k * x) / Math.tanh(k); } return c; };
+    const shaper = k => { const s = ac.createWaveShaper(); s.curve = soft(k); s.oversample = "2x"; return s; };
+    const env = (g, t, a, peak, d) => { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + d); };
+
+    const master = gain(0), comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = .004; comp.release.value = .18;
+    chain(master, comp, ac.destination);
+    const white = noise(2, false), brown = noise(4, true);
+
+    // the MG: motor whine harmonics, tyre roar and wind through Dani's open window
+    const car = gain(1); car.connect(master);
+    const motor = gain(0); chain(motor, filt("lowpass", 2600), car);
+    const harm = [[1, .5], [2.02, .22], [3.5, .07], [7.1, .03]].map(([h, v]) => { const o = ac.createOscillator(); chain(o, gain(v), motor); o.start(); return [o, h]; });
+    const tyreF = filt("lowpass", 200), tyre = gain(0); chain(loopSrc(brown), tyreF, tyre, car);
+    const windF = filt("bandpass", 900, .5), wind = gain(0); chain(loopSrc(white), windF, wind, car);
+
+    // the radio: everything goes through a big low shelf, a sub bump and soft clipping, like a boomy aftermarket sub
+    const music = gain(.8), musicOut = gain(.42);
+    const shelf = filt("lowshelf", 120); shelf.gain.value = 11; const sub = filt("peaking", 48, 1.1); sub.gain.value = 7;
+    const an = ac.createAnalyser(); an.fftSize = 256;
+    chain(music, filt("highpass", 28), shelf, sub, shaper(1.8), filt("lowpass", 12000), musicOut, master); musicOut.connect(an);
+    const delay = ac.createDelay(1), fb = gain(.32); delay.delayTime.value = 60 / 140 * .75; chain(delay, fb, delay); chain(delay, filt("lowpass", 3000), music);
+
+    const NOTE = n => 440 * Math.pow(2, (n - 69) / 12), STEP = 60 / 140 / 4;
+    const CHORDS = [[57, 60, 64], [53, 57, 60], [50, 53, 57], [52, 56, 59]]; // Am F Dm E
+    const ROOT = [33, 29, 38, 28];
+    const BASS = [[0, 6], [3, 2], [7, 3], [10, 4], [14, 2]];
+    const LEAD = [[0, 76], [3, 72], [6, 69], [8, 71], [10, 72], [14, 67]];
+    function k808(f, t, len) {
+      const o = ac.createOscillator(), g = gain(0); o.frequency.setValueAtTime(f * 3.5, t); o.frequency.exponentialRampToValueAtTime(f, t + .06);
+      env(g, t, .004, .95, Math.max(.3, len)); chain(o, g, music); o.start(t); o.stop(t + len + .6);
+      const c = ac.createBufferSource(), cg = gain(0); c.buffer = white; env(cg, t, .001, .22, .012); chain(c, filt("highpass", 2500), cg, music); c.start(t); c.stop(t + .05);
+    }
+    function clap(t) {
+      const s = ac.createBufferSource(), g = gain(0); s.buffer = white;
+      g.gain.setValueAtTime(.0001, t); [0, .012, .024].forEach(d => { g.gain.setValueAtTime(.45, t + d); g.gain.exponentialRampToValueAtTime(.06, t + d + .01); }); g.gain.exponentialRampToValueAtTime(.0001, t + .22);
+      chain(s, filt("bandpass", 1600, .9), g, music); s.start(t, Math.random()); s.stop(t + .25);
+      const o = ac.createOscillator(), og = gain(0); o.frequency.value = 190; env(og, t, .002, .2, .08); chain(o, og, music); o.start(t); o.stop(t + .12);
+    }
+    function hat(t, d, v) { const s = ac.createBufferSource(), g = gain(0); s.buffer = white; env(g, t, .001, .13 * v, d); chain(s, filt("highpass", 7500), g, music); s.start(t, Math.random()); s.stop(t + d + .05); }
+    function pad(notes, t, len) {
+      notes.forEach(n => [-7, 7].forEach(det => { const o = ac.createOscillator(), g = gain(0); o.type = "sawtooth"; o.frequency.value = NOTE(n); o.detune.value = det;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.02, t + .35); g.gain.setValueAtTime(.02, t + len - .3); g.gain.linearRampToValueAtTime(0, t + len);
+        chain(o, filt("lowpass", 1100), g, music); o.start(t); o.stop(t + len + .05); }));
+    }
+    function bell(f, t) {
+      [[1, .06], [2, .022], [3.01, .01]].forEach(([h, v]) => { const o = ac.createOscillator(), g = gain(0); o.type = h === 1 ? "triangle" : "sine"; o.frequency.value = f * h;
+        env(g, t, .003, v, .7); chain(o, g, music); g.connect(delay); o.start(t); o.stop(t + .8); });
+    }
+    function play(s, t) {
+      const bar = Math.floor(s / 16) % 4, st = s % 16, round = Math.floor(s / 64);
+      if (st === 0) pad(CHORDS[bar], t, STEP * 16);
+      const b = BASS.find(x => x[0] === st); if (b) k808(NOTE(ROOT[bar] + (bar === 3 && st === 14 ? 12 : 0)), t, STEP * b[1]);
+      if (st === 8) clap(t);
+      if (st % 2 === 0) hat(t, st === 6 ? .22 : .035, st % 4 ? .55 : 1);
+      if (bar % 2 === 1 && st >= 12) hat(t + STEP / 2, .03, .45);
+      if (bar === 3 && st >= 14) for (let k = 1; k < 3; k++) hat(t + STEP * k / 3, .02, .4);
+      if (round % 2 === 1 || bar >= 2) { const l = LEAD.find(x => x[0] === st); if (l) bell(NOTE(bar === 3 && l[1] === 67 ? 68 : l[1]), t); }
+    }
+    let next = ac.currentTime + .15, step = 0;
+    const timer = setInterval(() => {
+      if (ac.state !== "running") return;
+      if (next < ac.currentTime) next = ac.currentTime + .05;
+      while (next < ac.currentTime + .2) { play(step++, next); next += STEP; }
+    }, 40);
+
+    master.gain.setTargetAtTime(.8, ac.currentTime, .4);
+    const A = { ac, master, music: musicOut, an, fd: new Uint8Array(an.frequencyBinCount), on: true, timer, gain, filt, chain, shaper, white, env,
+      update(spd, accel, duck) {
+        const now = ac.currentTime, f = 170 + spd * 34;
+        harm.forEach(([o, h]) => o.frequency.setTargetAtTime(f * h, now, .08));
+        motor.gain.setTargetAtTime(Math.min(.08, .01 + Math.abs(accel) * .003 + spd * .0012), now, .12);
+        tyre.gain.setTargetAtTime(Math.min(.55, spd * .02), now, .2); tyreF.frequency.setTargetAtTime(160 + spd * 12, now, .2);
+        wind.gain.setTargetAtTime(Math.min(.22, spd * spd * .0003), now, .25); windF.frequency.setTargetAtTime(600 + spd * 25, now, .25);
+        musicOut.gain.setTargetAtTime(duck ? .15 : .42, now, .3);
+      } };
+    return A;
   }
-  $("soundBtn").onclick = () => {
-    const b = $("soundBtn");
+  function setSoundBtn() { const b = $("soundBtn"); b.textContent = "Sound: " + (audio && audio.on ? "on" : "off"); b.setAttribute("aria-pressed", !!(audio && audio.on)); }
+  function soundOn(on) {
     try {
-      if (!audio) audio = startAudio(); else { audio.on = !audio.on; audio.master.gain.setTargetAtTime(audio.on ? .5 : 0, audio.ac.currentTime, .2); if (audio.on) audio.ac.resume(); }
-      b.textContent = "Sound: " + (audio.on ? "on" : "off"); b.setAttribute("aria-pressed", audio.on);
-    } catch (e) { b.textContent = "Sound unavailable"; }
-  };
+      if (on && !audio) audio = startAudio();
+      if (audio) { audio.on = on; audio.master.gain.setTargetAtTime(on ? .8 : 0, audio.ac.currentTime, .2); if (on) audio.ac.resume(); }
+    } catch (e) { $("soundBtn").textContent = "Sound unavailable"; return; }
+    setSoundBtn();
+  }
+  $("soundBtn").onclick = () => { muted = !!(audio && audio.on); soundOn(!muted); };
+  // browsers only allow sound after a click, tap or key press, so the first one starts the engine and the radio
+  const firstGesture = e => { if (e.target && e.target.id === "soundBtn") return; if (!muted && !(audio && audio.on)) soundOn(true); };
+  ["pointerdown", "keydown", "touchend"].forEach(ev => addEventListener(ev, firstGesture, { passive: true }));
   function honk() { if (!audio || !audio.on) return; const ac = audio.ac; [415, 523].forEach(f => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(.12, ac.currentTime); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + .28); o.connect(g); g.connect(audio.master); o.start(); o.stop(ac.currentTime + .3); }); }
-  function vroom() { if (!audio || !audio.on) return; const ac = audio.ac, o = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain(); o.type = "sawtooth"; lp.type = "lowpass"; lp.frequency.value = 500;
-    o.frequency.setValueAtTime(55, ac.currentTime); o.frequency.exponentialRampToValueAtTime(140, ac.currentTime + 1.4); g.gain.setValueAtTime(0, ac.currentTime); g.gain.linearRampToValueAtTime(.3, ac.currentTime + .2); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + 2.2);
-    o.connect(lp); lp.connect(g); g.connect(audio.master); o.start(); o.stop(ac.currentTime + 2.3); }
+  // the SVR's supercharged V8 going past on the left: catch-up, a burble alongside, a launch with a gear change, then crackles on the overrun
+  function svrRoar() {
+    if (!audio || !audio.on) return;
+    const { ac, gain, filt, chain, shaper, white, env } = audio, t0 = ac.currentTime;
+    const out = gain(0), lp = filt("lowpass", 900, 1.2);
+    const pan = ac.createStereoPanner ? ac.createStereoPanner() : gain(1);
+    const am = gain(1); chain(lp, shaper(2.6), am, out, pan, audio.master);
+    const rpm = [[0, 1900], [2.2, 2700], [2.6, 1400], [3.2, 2300], [3.5, 1400], [4.4, 1500], [5.1, 5200], [5.25, 3600], [6.2, 6100], [6.5, 1700], [9, 1400]];
+    const parts = [[1, "sawtooth", .5], [.5, "sawtooth", .45], [.25, "square", .3], [7.3, "sine", .05]].map(([h, type, v]) => {
+      const o = ac.createOscillator(); o.type = type; const g = gain(v); chain(o, g, h > 2 ? out : lp);
+      o.frequency.setValueAtTime(rpm[0][1] / 60 * 4 * h, t0); rpm.slice(1).forEach(([t, r]) => o.frequency.linearRampToValueAtTime(r / 60 * 4 * h, t0 + t));
+      o.start(t0); o.stop(t0 + 9.2); return o; });
+    // cross-plane burble: wobble the level at a quarter of the firing rate
+    const wob = ac.createOscillator(), wg = gain(.3); wob.frequency.value = 22; chain(wob, wg, am.gain); wob.start(t0); wob.stop(t0 + 9.2);
+    [[0, .0001], [2.2, .5], [4.4, .55], [5.0, .9], [6.4, .7], [8.5, .02]].forEach(([t, v]) => out.gain.linearRampToValueAtTime(v, t0 + t));
+    [[0, 700], [2.2, 1100], [4.4, 1000], [5.1, 2600], [6.4, 1800], [8, 900]].forEach(([t, f]) => lp.frequency.linearRampToValueAtTime(f, t0 + t));
+    if (pan.pan) [[0, -.2], [2.2, -.85], [4.4, -.8], [6.5, -.35], [8.5, -.1]].forEach(([t, p]) => pan.pan.linearRampToValueAtTime(p, t0 + t));
+    for (let k = 0; k < 12; k++) { const t = t0 + 6.5 + Math.random() * 1.6, s = ac.createBufferSource(), g = gain(0); s.buffer = white;
+      env(g, t, .002, .5 * (1 - (t - t0 - 6.5) / 2), .025); chain(s, filt("bandpass", 900 + Math.random() * 1600, 1.4), g, pan); s.start(t, Math.random()); s.stop(t + .06); }
+  }
   function jingle() { if (!audio || !audio.on) return; const ac = audio.ac; [523, 659, 784, 1046].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "triangle"; o.frequency.value = f; g.gain.setValueAtTime(0, ac.currentTime + i * .12); g.gain.linearRampToValueAtTime(.18, ac.currentTime + i * .12 + .02); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + i * .12 + .5); o.connect(g); g.connect(audio.master); o.start(ac.currentTime + i * .12); o.stop(ac.currentTime + i * .12 + .6); }); }
 
   /* ------------------------------ main loop ------------------------------ */
   const tmpC = new THREE.Color(), fogC = new THREE.Color();
-  let glanceUntil = 0, lastLine = null, prog = 0, vel = 0, introStart = performance.now(), lastT = performance.now(), frame = 0, idle = 0, lastScroll = 0, chapterIdx = 0, steer = 0, yaw = 0, pitch = 0, passed = false, smoothSpeed = 0;
+  let daniYaw = 0, glanceUntil = 0, lastLine = null, prog = 0, vel = 0, introStart = performance.now(), lastT = performance.now(), frame = 0, idle = 0, lastScroll = 0, chapterIdx = 0, steer = 0, yaw = 0, pitch = 0, passed = false, smoothSpeed = 0;
   addEventListener("scroll", () => { lastScroll = performance.now(); if (scrollY > 30) $("intro").classList.add("off"); }, { passive: true });
   const INTRO_P = .05, INTRO_S = 11;
 
@@ -1183,10 +1334,10 @@ function wrapLines(g, text, maxW) {
     const introP = INTRO_P * (introT < 1 ? (1 - Math.cos(introT * Math.PI)) / 2 * .2 + introT * .8 : 1);
     const target = Math.max(scrollToProgress(u), introP);
     // car physics: chase the target with limited accel and top speed
-    if (!mu.on && !mu.done && prog < MUSTANG_P && target >= MUSTANG_P && prog > MUSTANG_P - 30 / L) { mu.on = true; mu.t0 = now; vroom(); }
-    if (prog < MUSTANG_P - .03) mu.done = false;
+    if (!mu.on && !mu.done && prog < SVR_P && target >= SVR_P && prog > SVR_P - 30 / L) { mu.on = true; mu.t0 = now; svrRoar(); }
+    if (prog < SVR_P - .03) mu.done = false;
     const te = mu.on ? (mu.fix != null ? mu.fix : (now - mu.t0) / 1000) : -1;
-    if (mu.on && te > 9) { mu.on = false; mu.done = true; mustang.visible = false; }
+    if (mu.on && te > 9) { mu.on = false; mu.done = true; svr.visible = false; }
     let want = clamp((target - prog) * L * 1.6, -62, 62);
     if (mu.on) want = 15; // hold a steady cruise while the moment plays out
     const acc = Math.sign(want - vel) === Math.sign(vel) || vel === 0 ? 18 : 40;
@@ -1211,17 +1362,18 @@ function wrapLines(g, text, maxW) {
     car.userData.fresh.rotation.z = -steer * .6 + Math.sin(t * 2.3) * .08 * Math.min(1, speed / 8 + .2);
     car.userData.fresh.rotation.x = clamp(-(want - vel) * .004, -.3, .3);
 
-    // the Mustang moment
+    // the SVR moment
     let slam = 0, zoom = 1;
     if (mu.on) {
       const rel = te < 2.2 ? -16 + 17 * sstep(0, 2.2, te) : te < 4.4 ? 1 + Math.sin(te * 1.3) * .25 : 1 + 12.5 * (te - 4.4) * (te - 4.4) + 2 * (te - 4.4);
-      const q = at(clamp((dist + rel) / L, 0, 1)); mustang.visible = te < 8.5;
-      mustang.position.copy(q.pos).add(q.right.multiplyScalar(2.7)); mustang.rotation.y = Math.atan2(-q.tan.x, -q.tan.z);
+      const q = at(clamp((dist + rel) / L, 0, 1)); svr.visible = te < 8.5;
+      svr.position.copy(q.pos).add(q.right.multiplyScalar(2.2)); svr.rotation.y = Math.atan2(-q.tan.x, -q.tan.z);
+      svr.userData.wheels.forEach(w => { w.rotation.x -= 18 * dt / .41; });
       const look = sstep(2.2, 2.7, te) * (1 - sstep(4.1, 4.5, te));
-      muGuy.head.rotation.y = -1.35 * look; muGuy.head.rotation.x = .08 * look;
-      const wink = te > 3.0 && te < 3.45 ? .08 : 1; muGuy.eyes[0].scale.y = lerp(muGuy.eyes[0].scale.y, wink, .5);
-      muGuy.smile.scale.set(1 + look * .4, 1 + look * .6, 1);
-      if (te > 1.5 && te < 4.6) { zoom = lerp(1, .85, sstep(1.5, 2.6, te) * (1 - sstep(4.1, 4.6, te))); }
+      svrGuy.turn(-1.25 * look, .05 * look);
+      if (svrGuy.lid) svrGuy.lid.visible = te > 3.0 && te < 3.5;
+      svrGuy.smile.forEach(([m, i]) => { m.morphTargetInfluences[i] = look; });
+      if (te > 1.5 && te < 4.6) { zoom = lerp(1, .62, sstep(1.5, 2.8, te) * (1 - sstep(4.1, 4.6, te))); }
       if (te > 5.0 && te < 5.9) { const f = te - 5.0, ph = (f % .45) / .45; slam = Math.sin(ph * Math.PI); if (ph > .9 && !mu["h" + Math.floor(f / .45)]) { mu["h" + Math.floor(f / .45)] = 1; honk(); } }
     } else { mu.h0 = mu.h1 = 0; }
     hands[1].position.set(lerp(.185, .03, sstep(4.8, 5.05, te) * (1 - sstep(5.9, 6.2, te))), .01 + slam * .1, .015 + slam * .12);
@@ -1233,8 +1385,8 @@ function wrapLines(g, text, maxW) {
     // camera look
     const autoRight = !reduceMotion && prog > .006 && prog < .034;
     let ty = userYaw + hoverX * -.25, tp = userPitch + hoverY * -.08 - .05 + (camera.aspect < 1 ? .1 : 0);
-    if (lookHold || lookToggle || autoRight || (now < glanceUntil && !reduceMotion)) { ty = -1.5; tp = .02; }
-    if (mu.on && te > 1.4 && te < 4.5) { ty = 1.3; tp = -.12; }
+    if (lookHold || lookToggle || autoRight || (now < glanceUntil && !reduceMotion)) { ty = -1.62; tp = -.09; }
+    if (mu.on && te > 1.4 && te < 4.5) { ty = 1.32; tp = .1; }
     const lean = mu.on ? sstep(1.4, 2.4, te) * (1 - sstep(4.2, 4.8, te)) : 0;
     head.position.set(-.4 - lean * .2, 1.27 + lean * .03, .14 - lean * .05);
     if (mu.on && te >= 4.5 && te < 6.2) { ty = 0; tp = -.34 * sstep(4.6, 5.0, te); }
@@ -1249,13 +1401,10 @@ function wrapLines(g, text, maxW) {
     if (!mu.on && line && line !== lastLine && LINES.includes(line) && line[0] > .05 && vel > 0) glanceUntil = now + 2600;
     lastLine = line;
     const looking = yaw < -.8;
-    const headYaw = mu.on && te > .3 && te < 4.6 ? 1.0 : looking ? 1.4 : friendTalks ? .62 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
-    headG.rotation.y = lerp(headG.rotation.y, headYaw, 1 - Math.exp(-dt * 3));
-    headG.rotation.x = Math.sin(t * 1.9) * .025 * Math.min(1, speed / 10);
-    headG.userData.mouth.scale.y = friendTalks ? 1 + Math.abs(Math.sin(t * 13) * Math.sin(t * 4.1)) * 1.8 : 1;
-    hairU.uTime.value = t; hairU.uStrength.value = .12 + Math.min(1, smoothSpeed / 22) * .85;
-    hairU.uWind.value.set(-.32, .12, 1).normalize().applyAxisAngle(V(0, 1, 0), -headG.rotation.y);
-    hairU.uLight.value = 1 - night * .55;
+    const headYaw = mu.on && te > .3 && te < 4.6 ? .95 : looking ? 1.15 : friendTalks ? .6 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
+    daniYaw = lerp(daniYaw, headYaw, 1 - Math.exp(-dt * 3));
+    dani.turn(daniYaw, Math.sin(t * 1.9) * .025 * Math.min(1, speed / 10) + (friendTalks ? Math.sin(t * 6.5) * Math.sin(t * 2.3) * .06 : 0));
+    dani.t.value = t; dani.wind.value = .2 + Math.min(1, smoothSpeed / 22) * .8;
 
     // sky + light
     skyU.uTop.value.copy(DAY.top).lerp(NIGHT.top, night); skyU.uMid.value.copy(DAY.mid).lerp(NIGHT.mid, night); skyU.uHor.value.copy(DAY.hor).lerp(NIGHT.hor, night);
@@ -1301,7 +1450,7 @@ function wrapLines(g, text, maxW) {
     const still = now - lastScroll > 2500 && speed < 1 && introT >= 1 && prog < .97 && cv.hidden;
     $("hint").classList.toggle("on", still);
     if (introT >= 1 && prog > .03) $("intro").classList.add("off");
-    if (audio && audio.on) { const f = 140 + smoothSpeed * 16; audio.o1.frequency.setTargetAtTime(f, audio.ac.currentTime, .1); audio.o2.frequency.setTargetAtTime(f * 1.5, audio.ac.currentTime, .1); audio.wg.gain.setTargetAtTime(Math.min(.5, smoothSpeed * smoothSpeed * .0012), audio.ac.currentTime, .2); }
+    if (audio && audio.on && frame % 2 === 0) audio.update(smoothSpeed, accelNow, mu.on && te < 7.5);
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
