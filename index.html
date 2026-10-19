@@ -293,10 +293,10 @@ function wrapLines(g, text, maxW) {
 
   /* ------------------------------ renderer ------------------------------ */
   const canvas = document.getElementById("scene");
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(62, 1, 0.03, 8000);
+  const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 8000);
   function resize() {
     const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false);
     const aspect = w / h; camera.aspect = aspect;
@@ -384,7 +384,7 @@ function wrapLines(g, text, maxW) {
       const p = P[i], r = RIGHT[i];
       pos.push(p.x + r.x * a, y, p.z + r.z * a, p.x + r.x * b, y, p.z + r.z * b);
       uv.push(0, i * 2 / vScale, 1, i * 2 / vScale);
-      if (i < i1) { const k = (i - i0) * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+      if (i < i1) { const k = (i - i0) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
@@ -415,15 +415,20 @@ function wrapLines(g, text, maxW) {
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]), fog: true,
     vertexShader: `varying vec3 vW;
       #include <fog_pars_vertex>
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       void main(){
         vec4 w = modelMatrix*vec4(position,1.); vW = w.xyz;
         vec4 mvPosition = viewMatrix*w; gl_Position = projectionMatrix*mvPosition;
+        #include <logdepthbuf_vertex>
         #include <fog_vertex>
       }`,
     fragmentShader: `uniform float uTime, uNight; uniform vec3 uSun, uHor, uMid; varying vec3 vW;
       #include <common>
       #include <fog_pars_fragment>
+      #include <logdepthbuf_pars_fragment>
       void main(){
+        #include <logdepthbuf_fragment>
         vec2 q = vW.xz;
         vec3 n = normalize(vec3(0.06*sin(q.x*0.11+uTime*1.3)+0.04*sin(q.y*0.23-uTime*1.7)+0.02*sin((q.x+q.y)*0.7+uTime*2.9), 1.0,
                                 0.06*cos(q.y*0.13+uTime*1.1)+0.04*sin(q.x*0.29+uTime*2.1)+0.02*cos((q.x-q.y)*0.8-uTime*3.1)));
@@ -461,20 +466,25 @@ function wrapLines(g, text, maxW) {
     vertexShader: `attribute vec3 aColor; attribute float aSeed; attribute float aTower;
       varying vec3 vN; varying vec3 vLP; varying vec3 vC; varying float vSeed; varying vec3 vLN; varying float vTower;
       #include <fog_pars_vertex>
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       void main(){
         vec3 sc = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
         vLP = position*sc; vLN = normal; vC = aColor; vSeed = aSeed; vTower = aTower;
         vN = normalize(mat3(modelMatrix)*mat3(instanceMatrix)*normal);
         vec4 mvPosition = modelViewMatrix*instanceMatrix*vec4(position,1.0);
         gl_Position = projectionMatrix*mvPosition;
+        #include <logdepthbuf_vertex>
         #include <fog_vertex>
       }`,
     fragmentShader: `uniform vec3 uSun, uSunCol, uAmb; uniform float uNight;
       varying vec3 vN; varying vec3 vLP; varying vec3 vC; varying float vSeed; varying vec3 vLN; varying float vTower;
       #include <common>
       #include <fog_pars_fragment>
+      #include <logdepthbuf_pars_fragment>
       float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
       void main(){
+        #include <logdepthbuf_fragment>
         vec3 n = normalize(vN);
         float diff = max(dot(n, uSun), 0.0);
         vec3 col = vC*(uAmb + uSunCol*diff);
@@ -499,7 +509,7 @@ function wrapLines(g, text, maxW) {
   const STUCCO = ["#e0c9a6", "#cfa47f", "#e6b9a2", "#bcc7cb", "#d6d2b8", "#aab8a3", "#ead6b3", "#a1aabc", "#f0dcc8", "#c3a7c4"].map(c => new THREE.Color(c));
   const GLASS = ["#5d7088", "#4a5a70", "#7b8ca2", "#3c4a5c", "#8a8f9a"].map(c => new THREE.Color(c));
   const bList = [];
-  const addB = (x, z, w, d, h, yaw, tower) => bList.push({ x, z, w, d, h, yaw, tower });
+  const addB = (x, z, w, d, h, yaw, tower, y = 0) => bList.push({ x, z, w, d, h, yaw, tower, y });
   for (let dd = 40; dd < L - 180; dd += rr(16, 30)) {
     const p = dd / L;
     for (const side of [-1, 1]) {
@@ -522,16 +532,25 @@ function wrapLines(g, text, maxW) {
     const dc = Math.hypot(x - 300, z - 560 + 0);
     addB(x, z, w, d, rr(50, 120) + 120 * Math.max(0, 1 - Math.hypot(x - 320, z + 600) / 200), 0, true);
   }
+  // stepped tops on taller buildings so the skyline isn't all plain boxes
+  bList.slice().forEach(b => { if (b.h > 18 && rnd() < .7) { const k = rr(.55, .8); addB(b.x, b.z, b.w * k, b.d * k, b.h * rr(.25, .5), b.yaw, b.tower, b.h);
+    if (b.tower && rnd() < .6) addB(b.x, b.z, b.w * k * .6, b.d * k * .6, b.h * .2, b.yaw, true, b.h * 1.4); } });
   const buildings = new THREE.InstancedMesh(bGeo, bMat, bList.length);
   { const d = new THREE.Object3D(), col = new Float32Array(bList.length * 3), sd = new Float32Array(bList.length), tw = new Float32Array(bList.length);
     bList.forEach((b, i) => {
-      d.position.set(b.x, 0, b.z); d.rotation.set(0, b.yaw, 0); d.scale.set(b.w, b.h, b.d); d.updateMatrix(); buildings.setMatrixAt(i, d.matrix);
+      d.position.set(b.x, b.y, b.z); d.rotation.set(0, b.yaw, 0); d.scale.set(b.w, b.h, b.d); d.updateMatrix(); buildings.setMatrixAt(i, d.matrix);
       const c = (b.tower ? GLASS : STUCCO)[Math.floor(rnd() * (b.tower ? GLASS.length : STUCCO.length))]; col.set([c.r, c.g, c.b], i * 3); sd[i] = rnd(); tw[i] = b.tower ? 1 : 0;
     });
     bGeo.setAttribute("aColor", new THREE.InstancedBufferAttribute(col, 3));
     bGeo.setAttribute("aSeed", new THREE.InstancedBufferAttribute(sd, 1));
     bGeo.setAttribute("aTower", new THREE.InstancedBufferAttribute(tw, 1)); }
   scene.add(buildings);
+  { const roofTop = new Map(); bList.forEach(b => { const key = b.x + "," + b.z; const top = b.y + b.h; if (!roofTop.has(key) || roofTop.get(key).top < top) roofTop.set(key, { b, top }); });
+    const units = []; roofTop.forEach(({ b, top }) => { for (let k = 0; k < 3; k++) units.push({ b, top, ox: rr(-.35, .35) * b.w, oz: rr(-.35, .35) * b.d, s: rr(1.2, 3), h: rr(.8, 2.2) }); });
+    const ug = new THREE.BoxGeometry(1, 1, 1); ug.translate(0, .5, 0);
+    const roof = new THREE.InstancedMesh(ug, new THREE.MeshLambertMaterial({ color: 0x8d8a86 }), units.length), d = new THREE.Object3D();
+    units.forEach((u, i) => { const c = Math.cos(u.b.yaw), sn = Math.sin(u.b.yaw); d.position.set(u.b.x + u.ox * c + u.oz * sn, u.top, u.b.z - u.ox * sn + u.oz * c); d.rotation.set(0, u.b.yaw, 0); d.scale.set(u.s, u.h, u.s * rr(.7, 1.4)); d.updateMatrix(); roof.setMatrixAt(i, d.matrix); });
+    scene.add(roof); }
 
   /* ------------------------------ palm trees ------------------------------ */
   const trunkGeo = new THREE.CylinderGeometry(0.16, 0.3, 1, 7, 10); trunkGeo.translate(0, 0.5, 0);
@@ -557,13 +576,13 @@ function wrapLines(g, text, maxW) {
   const palmMat = new THREE.MeshLambertMaterial({ color: 0x5a4a3a });
   const frondMat = new THREE.MeshLambertMaterial({ color: 0x2f5a35, side: THREE.DoubleSide });
   const trunks = new THREE.InstancedMesh(trunkGeo, palmMat, palms.length);
-  const fronds = new THREE.InstancedMesh(frondGeo, frondMat, palms.length * 9);
+  const fronds = new THREE.InstancedMesh(frondGeo, frondMat, palms.length * 14);
   { const d = new THREE.Object3D(); let k = 0;
     palms.forEach((t, i) => {
       d.position.copy(t.pos); d.rotation.set(0, t.yaw, 0); d.scale.set(1, t.h, 1); d.updateMatrix(); trunks.setMatrixAt(i, d.matrix);
       const top = new THREE.Vector3(0.9, t.h, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), t.yaw).add(t.pos);
-      for (let f = 0; f < 9; f++) {
-        d.position.copy(top); d.rotation.set(rr(-.15, .25), f / 9 * Math.PI * 2 + rnd() * .4, 0, "YXZ"); const s = rr(.8, 1.15); d.scale.set(s, s, s); d.updateMatrix(); fronds.setMatrixAt(k++, d.matrix);
+      for (let f = 0; f < 14; f++) {
+        d.position.copy(top); d.rotation.set(f % 2 ? rr(-.35, -.05) : rr(.05, .35), f / 14 * Math.PI * 2 + rnd() * .3, 0, "YXZ"); const s = rr(.8, 1.15); d.scale.set(s, s, s); d.updateMatrix(); fronds.setMatrixAt(k++, d.matrix);
       }
     }); }
   scene.add(trunks, fronds);
@@ -598,6 +617,13 @@ function wrapLines(g, text, maxW) {
   const basic = (map, extra = {}) => new THREE.MeshBasicMaterial(Object.assign({ map }, extra));
   const lambert = c => new THREE.MeshLambertMaterial({ color: c });
   function facing(obj, normal) { obj.rotation.set(0, Math.atan2(normal.x, normal.z), 0); }
+  function rbox(w, h, d, mat, pos) {
+    const r = Math.min(.035, Math.min(w, h, d) * .3), sh = new THREE.Shape(), x = w / 2 - r, y = h / 2 - r;
+    sh.moveTo(-x, -y); sh.lineTo(x, -y); sh.lineTo(x, y); sh.lineTo(-x, y); sh.lineTo(-x, -y);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: Math.max(.001, d - 2 * r), bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: 4 });
+    g.translate(0, 0, -(d - 2 * r) / 2); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.position.copy(pos); return m;
+  }
   function box(w, h, d, mat, pos) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.copy(pos); return m; }
 
   /* billboards on Sunset */
@@ -618,7 +644,7 @@ function wrapLines(g, text, maxW) {
     const pos = a.pos.clone().add(a.right.clone().multiplyScalar(side * 15)); grp.position.copy(pos);
     const n = a.tan.clone().multiplyScalar(-Math.cos(.45)).add(a.right.clone().multiplyScalar(-side * Math.sin(.45))).normalize();
     facing(grp, n);
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), basic(tex)); face.position.set(0, 12, 0.32); grp.add(face);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), basic(tex)); face.position.set(0, 12, 0.42); grp.add(face);
     grp.add(box(16.6, 8.6, 0.5, lambert(0x222026), new THREE.Vector3(0, 12, 0)));
     grp.add(box(0.5, 8, 0.5, lambert(0x3a3a40), new THREE.Vector3(-4, 4, 0)), box(0.5, 8, 0.5, lambert(0x3a3a40), new THREE.Vector3(4, 4, 0)));
     grp.add(box(16, 0.15, 1.2, lambert(0x3a3a40), new THREE.Vector3(0, 7.8, 0.6)));
@@ -638,7 +664,7 @@ function wrapLines(g, text, maxW) {
     });
     const grp = new THREE.Group(); grp.position.copy(a.pos.clone().add(a.right.clone().multiplyScalar(side * 17)));
     facing(grp, a.tan.clone().multiplyScalar(-0.75).add(a.right.clone().multiplyScalar(-0.66)).normalize());
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(10, 25), basic(tex)); face.position.set(0, 18, 0.4); grp.add(face);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(10, 25), basic(tex)); face.position.set(0, 18, 0.5); grp.add(face);
     grp.add(box(10.6, 25.6, 0.6, lambert(0x1a1a1f), new THREE.Vector3(0, 18, 0)), box(1.2, 6, 1.2, lambert(0x2a2a30), new THREE.Vector3(0, 3, 0)));
     scene.add(grp); }
 
@@ -659,7 +685,7 @@ function wrapLines(g, text, maxW) {
     grp.add(box(0.6, 8.4, 0.6, steel, new THREE.Vector3(-10.4, 4.2, 0)), box(0.6, 8.4, 0.6, steel, new THREE.Vector3(10.4, 4.2, 0)));
     grp.add(box(21.4, 0.5, 0.9, steel, new THREE.Vector3(0, 8.2, 0)), box(21.4, 0.3, 0.9, steel, new THREE.Vector3(0, 7.1, 0)));
     // in group space +x is the road's left (we face back toward the car), so the right lanes sit at -x
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(11, 4.6), basic(tex)); face.position.set(-3.6, 10.2, 0.5); grp.add(face);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(11, 4.6), basic(tex)); face.position.set(-3.6, 10.2, 0.6); grp.add(face);
     grp.add(box(11.2, 4.8, 0.3, lambert(0x0a4a28), new THREE.Vector3(-3.6, 10.2, 0.3)));
     scene.add(grp); return grp;
   });
@@ -719,9 +745,9 @@ function wrapLines(g, text, maxW) {
     g.add(box(24, 6, 12, new THREE.MeshLambertMaterial({ color: 0xf5efe2 }), new THREE.Vector3(0, 3, 0)));
     const band = new THREE.Mesh(new THREE.BoxGeometry(24.4, 1.4, 12.4), new THREE.MeshBasicMaterial({ map: stripes })); band.position.set(0, 6.4, 0); g.add(band);
     g.add(box(25, 0.4, 13, lambert(0xc8102e), new THREE.Vector3(0, 7.2, 0)));
-    const win = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.6), new THREE.MeshBasicMaterial({ color: 0xffe3a0 })); win.position.set(-6, 1.9, 6.02); g.add(win); neon.push(win.material);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.6), new THREE.MeshBasicMaterial({ color: 0xffe3a0 })); win.position.set(-6, 1.9, 6.1); g.add(win); neon.push(win.material);
     const nameTex = canvasTex(1024, 256, (c, w, h) => { c.fillStyle = "#c8102e"; c.fillRect(0, 0, w, h); c.fillStyle = "#ffd23f"; c.font = "150px Anton"; c.textBaseline = "middle"; c.textAlign = "center"; c.fillText("BYTE BURGER", w / 2, h / 2 + 6); });
-    const nm = new THREE.Mesh(new THREE.PlaneGeometry(14, 3.5), basic(nameTex)); nm.position.set(0, 9.5, 6.3); g.add(nm);
+    const nm = new THREE.Mesh(new THREE.PlaneGeometry(14, 3.5), basic(nameTex)); nm.position.set(0, 9.5, 6.6); g.add(nm);
     scene.add(g);
     // tall googie sign
     const s = new THREE.Group(); s.position.copy(base.clone().add(fw.clone().multiplyScalar(42)).add(rt.clone().multiplyScalar(-4))); facing(s, fw.clone().negate());
@@ -731,7 +757,7 @@ function wrapLines(g, text, maxW) {
       c.fillStyle = "#ffd23f"; c.font = "190px Anton"; c.textAlign = "center"; c.fillText("BYTE", w / 2, 220); c.fillText("BURGER", w / 2, 410);
       c.font = "700 40px 'Barlow Condensed'"; c.fillStyle = "#f5efe2"; c.fillText("DRIVE-THRU · OPEN 24/7 · LIKE QUINN'S PAGER", w / 2, 475);
     });
-    const sg = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), basic(sgTex)); sg.position.set(0, 24, 0.3); s.add(sg); s.add(box(14.4, 7.4, 0.5, lambert(0x6a0d1c), new THREE.Vector3(0, 24, 0)));
+    const sg = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), basic(sgTex)); sg.position.set(0, 24, 0.42); s.add(sg); s.add(box(14.4, 7.4, 0.5, lambert(0x6a0d1c), new THREE.Vector3(0, 24, 0)));
     const arrowTex = canvasTex(512, 256, (c, w, h) => { c.fillStyle = "#ffd23f"; c.beginPath(); c.moveTo(0, 70); c.lineTo(360, 70); c.lineTo(360, 10); c.lineTo(510, 128); c.lineTo(360, 246); c.lineTo(360, 186); c.lineTo(0, 186); c.closePath(); c.fill(); });
     const ar = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), basic(arrowTex, { transparent: true })); ar.position.set(-5, 17, 0.4); ar.rotation.z = -0.5; s.add(ar); neon.push(ar.material, sg.material);
     scene.add(s);
@@ -747,7 +773,7 @@ function wrapLines(g, text, maxW) {
       c.fillStyle = "#ffd23f"; c.font = "48px Anton"; c.fillText("TO ORDER:", 50, y + 20); c.font = "600 36px 'Barlow Condensed'"; c.fillStyle = "#f5efe2";
       CV.contact.forEach((k, i) => c.fillText(k.value, 50, y + 75 + i * 48));
     });
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 3.1), basic(mTex)); face.position.set(0, 2.7, 0.12); mb.add(face);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 3.1), basic(mTex)); face.position.set(0, 2.7, 0.16); mb.add(face);
     mb.add(box(2.6, 3.4, 0.2, lambert(0x2a2024), new THREE.Vector3(0, 2.7, 0)), box(0.25, 1.2, 0.25, lambert(0x2a2024), new THREE.Vector3(0, 0.6, 0)));
     scene.add(mb);
   }
@@ -838,43 +864,43 @@ function wrapLines(g, text, maxW) {
     const sh = new THREE.Shape(); sh.moveTo(.42, .55); sh.lineTo(.48, .84); sh.quadraticCurveTo(.54, .965, .74, .97); sh.lineTo(1.05, .955); sh.quadraticCurveTo(1.16, .94, 1.16, .86); sh.lineTo(1.16, .55); sh.lineTo(.42, .55);
     const g = new THREE.ExtrudeGeometry(sh, { depth: 1.74, bevelEnabled: true, bevelThickness: .03, bevelSize: .03, bevelSegments: 4, curveSegments: 14 });
     g.rotateY(Math.PI / 2); g.translate(-.87, 0, 0); rig.add(new THREE.Mesh(g, M.dash));
-    rig.add(box(1.72, .006, .006, M.stitch, V(0, .945, -.52)));
-    rig.add(box(1.7, .03, .05, M.trim, V(0, .78, -.47)));
+    rig.add(rbox(1.72, .006, .006, M.stitch, V(0, .945, -.52)));
+    rig.add(rbox(1.7, .03, .05, M.trim, V(0, .78, -.47)));
     // binnacle
     const bin = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, .22, 28, 1, true, Math.PI / 2, Math.PI), M.dash); bin.material.side = THREE.DoubleSide;
     bin.rotation.x = Math.PI / 2; bin.position.set(-.4, .93, -.64); rig.add(bin);
     // vents
-    [-.78, .66, -.05, .07].forEach(x => { const v = box(.16, .06, .03, M.trim, V(x, .86, -.47)); rig.add(v); for (let k = 0; k < 3; k++) rig.add(box(.15, .006, .035, M.chrome, V(x, .84 + k * .02, -.465))); });
+    [-.78, .66, -.05, .07].forEach(x => { const v = rbox(.16, .06, .03, M.trim, V(x, .86, -.47)); rig.add(v); for (let k = 0; k < 3; k++) rig.add(rbox(.15, .006, .035, M.chrome, V(x, .84 + k * .02, -.465))); });
     // center screen
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(.26, .16), new THREE.MeshBasicMaterial()); scr.position.set(.02, .88, -.5); scr.rotation.x = -.25; rig.add(scr); car.userData.screen = scr;
-    rig.add(box(.29, .19, .02, M.trim, V(.02, .88, -.512)).rotateX(-.25));
+    rig.add(rbox(.29, .19, .02, M.trim, V(.02, .88, -.512)).rotateX(-.25));
     // gauges
     const gauge = new THREE.Mesh(new THREE.PlaneGeometry(.34, .135), new THREE.MeshBasicMaterial()); gauge.position.set(-.4, .9, -.66); gauge.rotation.x = -.2; rig.add(gauge); car.userData.gauge = gauge;
     // console + shifter
-    rig.add(box(.28, .32, 1.0, M.dash, V(.02, .5, .02)));
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(.045, .05, .04, 32), M.chrome); knob.position.set(.02, .68, -.12); rig.add(knob); rig.add(box(.2, .01, .2, M.trim, V(.02, .662, -.12)));
+    rig.add(rbox(.28, .32, 1.0, M.dash, V(.02, .5, .02)));
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(.045, .05, .04, 32), M.chrome); knob.position.set(.02, .68, -.12); rig.add(knob); rig.add(rbox(.2, .01, .2, M.trim, V(.02, .662, -.12)));
     // pillars, roof, doors
     [-1, 1].forEach(s => {
       rig.add(beam(V(s * .84, .95, -1.1), V(s * .74, 1.47, -.33), .07, M.paint));
       rig.add(beam(V(s * .835, .95, -1.08), V(s * .73, 1.45, -.34), .075, M.head));
       rig.add(beam(V(s * .74, 1.47, -.33), V(s * .74, 1.47, 1.3), .08, M.head));
       rig.add(beam(V(s * .82, .98, .7), V(s * .74, 1.47, .66), .13, M.head));
-      rig.add(box(.1, .52, 2.1, M.dash, V(s * .9, .72, .25)));
-      rig.add(box(.11, .2, 1.5, M.leather, V(s * .86, .78, .25)));
-      rig.add(box(.16, .05, 2.1, M.paint, V(s * .92, .99, .25)));
-      rig.add(box(.03, .03, .14, M.chrome, V(s * .845, .86, -.2)));
+      rig.add(rbox(.1, .52, 2.1, M.dash, V(s * .9, .72, .25)));
+      rig.add(rbox(.11, .2, 1.5, M.leather, V(s * .86, .78, .25)));
+      rig.add(rbox(.16, .05, 2.1, M.paint, V(s * .92, .99, .25)));
+      rig.add(rbox(.03, .03, .14, M.chrome, V(s * .845, .86, -.2)));
       // side mirror
       const sm = new THREE.Group(); sm.position.set(s * 1.02, 1.03, -.68);
-      sm.add(box(.22, .14, .08, M.paint, V(s * .05, 0, 0)), box(.19, .11, .01, M.chrome, V(s * .05, 0, .045)), beam(V(-s * .08, -.02, 0), V(s * .02, 0, 0), .03, M.paint));
+      sm.add(rbox(.22, .14, .08, M.paint, V(s * .05, 0, 0)), rbox(.19, .11, .01, M.chrome, V(s * .05, 0, .045)), beam(V(-s * .08, -.02, 0), V(s * .02, 0, 0), .03, M.paint));
       rig.add(sm);
     });
-    rig.add(box(1.5, .08, .1, M.head, V(0, 1.48, -.34)));
-    rig.add(box(1.52, .04, 1.7, M.head, V(0, 1.5, .5)));
+    rig.add(rbox(1.5, .08, .1, M.head, V(0, 1.48, -.34)));
+    rig.add(rbox(1.52, .04, 1.7, M.head, V(0, 1.5, .5)));
     // windshield
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.62, .94), M.glass); ws.position.set(0, 1.21, -.71); ws.rotation.x = .97; rig.add(ws);
     // mirror + air freshener
     rig.add(beam(V(.02, 1.49, -.5), V(.02, 1.45, -.6), .02, M.trim));
-    const mir = new THREE.Group(); mir.position.set(.02, 1.43, -.62); mir.rotation.set(0.05, -.2, 0); mir.add(box(.22, .06, .03, M.trim, V(0, 0, 0)), box(.2, .045, .005, M.trim, V(0, 0, .018))); rig.add(mir);
+    const mir = new THREE.Group(); mir.position.set(.02, 1.43, -.62); mir.rotation.set(0.05, -.2, 0); mir.add(rbox(.18, .055, .03, M.trim, V(0, 0, 0))); rig.add(mir);
     const fresh = new THREE.Group(); fresh.position.set(.04, 1.4, -.6); rig.add(fresh); car.userData.fresh = fresh;
     fresh.add(beam(V(0, 0, 0), V(0, -.09, 0), .002, M.stitch));
     const ftex = canvasTex(128, 192, (g) => { g.fillStyle = "#3d8b3d"; g.beginPath(); for (let k = 0; k < 7; k++) { const a = -Math.PI / 2 + (k - 3) * .45; g.ellipse(64 + Math.cos(a) * 30, 60 + Math.sin(a) * 30 + 10, 34, 10, a, 0, Math.PI * 2); } g.fill(); g.fillStyle = "#7a5a3a"; g.fillRect(58, 70, 12, 110); g.fillStyle = "#ffd23f"; g.font = "700 26px 'Barlow Condensed'"; g.textAlign = "center"; g.fillText("LA", 64, 140); });
@@ -884,12 +910,12 @@ function wrapLines(g, text, maxW) {
     const pa = hg.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) / .975, zz = (-pa.getZ(i) + .75) / 1.5;
       pa.setY(i, .985 - .07 * Math.pow(Math.abs(x), 3) - .25 * Math.pow(Math.abs(x), 10) - .14 * zz * zz - .04 * Math.pow(zz, 6) + .012 * Math.cos(x * 9) * (1 - zz) * Math.exp(-((x / .5) ** 2))); }
     hg.computeVertexNormals(); const hood = new THREE.Mesh(hg, M.paint); hood.position.set(0, 0, -1.85); rig.add(hood);
-    [-.38, .22].forEach(x => { const w = box(.6, .012, .02, M.dash, V(x, .98, -1.18)); w.rotation.y = .12; rig.add(w); });
+    [-.38, .22].forEach(x => { const w = rbox(.6, .012, .02, M.dash, V(x, .98, -1.18)); w.rotation.y = .12; rig.add(w); });
     // passenger seat
-    const seat = new THREE.Group(); seat.position.set(.45, 0, .5); rig.add(seat);
-    seat.add(box(.52, .14, .6, M.leather, V(0, .5, -.12))); const back = box(.52, .78, .14, M.leather, V(0, .95, .2)); back.rotation.x = .16; seat.add(back);
-    seat.add(box(.28, .18, .1, M.leather, V(0, 1.44, .27)));
-    for (let k = 0; k < 4; k++) seat.add(box(.5, .005, .005, M.stitch, V(0, .7 + k * .14, .12 + k * .023)));
+    const seat = new THREE.Group(); seat.position.set(.45, 0, .07); rig.add(seat);
+    seat.add(rbox(.52, .14, .6, M.leather, V(0, .5, -.12))); const back = rbox(.52, .78, .14, M.leather, V(0, .95, .2)); back.rotation.x = .16; seat.add(back);
+    seat.add(rbox(.28, .18, .1, M.leather, V(0, 1.44, .27)));
+    for (let k = 0; k < 4; k++) seat.add(rbox(.5, .005, .005, M.stitch, V(0, .7 + k * .14, .12 + k * .023)));
   }
   // steering wheel
   const wheelGrp = new THREE.Group(); wheelGrp.position.set(-.4, .84, -.47); wheelGrp.rotation.x = -.38; rig.add(wheelGrp);
@@ -908,7 +934,7 @@ function wrapLines(g, text, maxW) {
     }); }
 
   // the friend
-  const pal = new THREE.Group(); pal.position.set(.45, 0, .45); rig.add(pal);
+  const pal = new THREE.Group(); pal.position.set(.45, 0, .02); rig.add(pal);
   const skin = new THREE.MeshStandardMaterial({ color: 0xc68a63, roughness: .55 });
   const shirtTex = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = "#1e6e78"; g.fillRect(0, 0, w, h);
@@ -953,6 +979,8 @@ function wrapLines(g, text, maxW) {
   const hair = new THREE.InstancedMesh(strandGeo, new THREE.ShaderMaterial({
     uniforms: hairU, side: THREE.DoubleSide,
     vertexShader: `uniform float uTime, uStrength; uniform vec3 uWind; attribute float aPhase; varying float vS; varying float vX;
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       vec3 bend(vec3 rest, vec3 w, float s){ return normalize(mix(rest, w, clamp(uStrength*(0.15+1.05*s), 0.0, 0.93))); }
       void main(){
         float s = -position.y;
@@ -967,9 +995,13 @@ function wrapLines(g, text, maxW) {
         vec3 p = root + side*position.x*(1.0-0.75*s) + dir*s*L;
         vS = s; vX = position.x/0.0085;
         gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0);
+        #include <logdepthbuf_vertex>
       }`,
     fragmentShader: `uniform float uLight; varying float vS; varying float vX;
-      void main(){ vec3 c = mix(vec3(0.16,0.09,0.05), vec3(0.62,0.4,0.22), smoothstep(0.1,1.0,vS));
+      #include <logdepthbuf_pars_fragment>
+      void main(){
+        #include <logdepthbuf_fragment>
+        vec3 c = mix(vec3(0.16,0.09,0.05), vec3(0.62,0.4,0.22), smoothstep(0.1,1.0,vS));
         c *= (0.7 + 0.45*(1.0-abs(vX))) * uLight; gl_FragColor = vec4(c,1.0); }`
   }), HAIR);
   { const d = new THREE.Object3D();
@@ -1138,7 +1170,7 @@ function wrapLines(g, text, maxW) {
 
   /* ------------------------------ main loop ------------------------------ */
   const tmpC = new THREE.Color(), fogC = new THREE.Color();
-  let prog = 0, vel = 0, introStart = performance.now(), lastT = performance.now(), frame = 0, idle = 0, lastScroll = 0, chapterIdx = 0, steer = 0, yaw = 0, pitch = 0, passed = false, smoothSpeed = 0;
+  let glanceUntil = 0, lastLine = null, prog = 0, vel = 0, introStart = performance.now(), lastT = performance.now(), frame = 0, idle = 0, lastScroll = 0, chapterIdx = 0, steer = 0, yaw = 0, pitch = 0, passed = false, smoothSpeed = 0;
   addEventListener("scroll", () => { lastScroll = performance.now(); if (scrollY > 30) $("intro").classList.add("off"); }, { passive: true });
   const INTRO_P = .05, INTRO_S = 11;
 
@@ -1201,7 +1233,7 @@ function wrapLines(g, text, maxW) {
     // camera look
     const autoRight = !reduceMotion && prog > .006 && prog < .034;
     let ty = userYaw + hoverX * -.25, tp = userPitch + hoverY * -.08 - .05 + (camera.aspect < 1 ? .1 : 0);
-    if (lookHold || lookToggle || autoRight) { ty = -1.08; tp = .08; }
+    if (lookHold || lookToggle || autoRight || (now < glanceUntil && !reduceMotion)) { ty = -1.5; tp = .02; }
     if (mu.on && te > 1.4 && te < 4.5) { ty = 1.3; tp = -.12; }
     const lean = mu.on ? sstep(1.4, 2.4, te) * (1 - sstep(4.2, 4.8, te)) : 0;
     head.position.set(-.4 - lean * .2, 1.27 + lean * .03, .14 - lean * .05);
@@ -1214,8 +1246,10 @@ function wrapLines(g, text, maxW) {
     const muLine = mu.on ? MU_LINES.find(l => te >= l[0] && te < l[1]) : null;
     const line = muLine ? [0, 0, muLine[3], muLine[2]] : LINES.find(l => prog >= l[0] && prog < l[1]);
     const friendTalks = line && line[3] !== "Quinn";
+    if (!mu.on && line && line !== lastLine && LINES.includes(line) && line[0] > .05 && vel > 0) glanceUntil = now + 2600;
+    lastLine = line;
     const looking = yaw < -.8;
-    const headYaw = mu.on && te > .3 && te < 4.6 ? 1.0 : friendTalks || looking ? .62 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
+    const headYaw = mu.on && te > .3 && te < 4.6 ? 1.0 : looking ? 1.4 : friendTalks ? .62 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
     headG.rotation.y = lerp(headG.rotation.y, headYaw, 1 - Math.exp(-dt * 3));
     headG.rotation.x = Math.sin(t * 1.9) * .025 * Math.min(1, speed / 10);
     headG.userData.mouth.scale.y = friendTalks ? 1 + Math.abs(Math.sin(t * 13) * Math.sin(t * 4.1)) * 1.8 : 1;
