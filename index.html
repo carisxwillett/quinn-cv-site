@@ -1880,7 +1880,7 @@ function wrapLines(g, text, maxW) {
     mergeStatic(svr, new Set(svr.userData.wheels));
   }
 
-  const MU_LINES = [[.2, 3.1, "friend", "Is that... a Range Rover Sport SVR?"], [3.4, 4.8, "friend", "Did he just wink at you?"], [4.9, 7.2, "Quinn", "One day. ONE DAY."], [7.3, 9.0, "friend", "Easy. The MG didn't do anything."]];
+  const MU_LINES = [[.2, 3.1, "friend", "Is that... a Range Rover Sport SVR?"], [3.4, 4.8, "friend", "Did he just wink at you?"], [4.9, 7.9, "Quinn", "One day. ONE DAY."], [8.0, 10.7, "friend", "Easy. The MG didn't do anything."]];
   const mu = { on: false, done: false, t0: 0 };
 
   /* ------------------------------ our car ------------------------------ */
@@ -2456,8 +2456,8 @@ function wrapLines(g, text, maxW) {
     const { g } = screenTex.userData, w = 512, h = 320, song = radio.playing(), tr = song ? [SONG.title, "Justice ft. Tame Impala, SZA, King Gizzard"] : TRACKS[ch % TRACKS.length];
     const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, "#1a0f2e"); gr.addColorStop(1, "#3b1240"); g.fillStyle = gr; g.fillRect(0, 0, w, h);
     g.fillStyle = "#ffb347"; g.font = "700 30px 'Barlow Condensed'"; g.fillText(song ? "NOW PLAYING · FROM GTA VI" : "KQNN 101.1 FM · BASS BOOSTED", 28, 50);
-    g.fillStyle = "#f7efe4"; g.font = "48px Anton"; g.fillText(tr[0].toUpperCase(), 28, 130, w - 56);
-    g.fillStyle = "#bfb2cc"; g.font = "600 30px 'Barlow Condensed'"; g.fillText(tr[1], 28, 172);
+    g.fillStyle = "#f7efe4"; fitText(g, tr[0].toUpperCase(), "#px Anton", w - 56, 48); g.fillText(tr[0].toUpperCase(), 28, 130);
+    g.fillStyle = "#bfb2cc"; fitText(g, tr[1], "600 #px 'Barlow Condensed'", w - 56, 30); g.fillText(tr[1], 28, 172);
     const live = audio && audio.on && !song; if (live) audio.an.getByteFrequencyData(audio.fd);
     for (let i = 0; i < 24; i++) { const v = live ? .06 + .94 * audio.fd[Math.floor(1 + Math.pow(i / 24, 1.5) * 70)] / 255 : .25 + .75 * Math.abs(Math.sin(t * 3 + i * 1.7) * Math.sin(t * 1.3 + i)); g.fillStyle = i % 4 ? "#ff5d8f" : "#ffb347"; g.fillRect(28 + i * 19, 280 - v * 70, 12, v * 70); }
     g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(28, 296, 456, 5); g.fillStyle = "#f7efe4"; g.fillRect(28, 296, 456 * ((t * .02) % 1), 5);
@@ -2862,7 +2862,7 @@ function wrapLines(g, text, maxW) {
     if (!mu.on && !mu.done && prog < SVR_P && target >= SVR_P && prog > SVR_P - 30 / L) { mu.on = true; mu.t0 = now; svrRoar(); clearSvrLane(prog * L); }
     if (prog < SVR_P - .03) mu.done = false;
     const te = mu.on ? (mu.fix != null ? mu.fix : (now - mu.t0) / 1000) : -1;
-    if (mu.on && te > 9) { mu.on = false; mu.done = true; svr.visible = false; }
+    if (mu.on && te > 10.8) { mu.on = false; mu.done = true; svr.visible = false; }
     // the drive-thru: pull up to the window, order, and get handed the CV
     if (!order.on && !order.done && prog > 1 - 1.5 / L && Math.abs(vel) < 2.5) { order.on = true; order.t0 = now; }
     if (order.on && target < 1 - 3 / L) resetOrder();
@@ -3026,7 +3026,7 @@ function wrapLines(g, text, maxW) {
       scene.traverse(o => { if (o.isLight) o.layers.enableAll(); });
       renderer.autoClear = false; renderer.info.autoReset = false; }
     renderer.info.reset(); renderer.clear();
-    camera.layers.set(0); camera.near = .25; camera.far = 2600; camera.updateProjectionMatrix(); renderer.render(scene, camera);
+    camera.layers.set(0); camera.near = .5; camera.far = 2200; camera.updateProjectionMatrix(); renderer.render(scene, camera);
     renderer.clearDepth();
     camera.layers.set(1); camera.near = .02; camera.far = 12; camera.updateProjectionMatrix(); renderer.render(scene, camera);
     camera.layers.enableAll();
@@ -3034,10 +3034,10 @@ function wrapLines(g, text, maxW) {
   // drops the render resolution when frames run long and creeps it back up when there's headroom
   function adaptResolution(now, ms) {
     if (navigator.webdriver || document.hidden || ms > 250 || !cv.hidden) return;
-    ftAvg = lerp(ftAvg, ms, .05); if (now - prT < 1500) return; prT = now;
+    ftAvg = lerp(ftAvg, ms, .05); if (now - prT < 4000) return; prT = now;
     let np = pr;
-    if (ftAvg > 26 && pr > .8) { np = Math.max(.8, pr - .1); prLastDrop = now; }
-    else if (ftAvg < 19 && pr < PR_MAX && now - prLastDrop > 5000) np = Math.min(PR_MAX, pr + .1);
+    if (ftAvg > 30 && pr > .8) { np = Math.max(.8, pr - .1); prLastDrop = now; }
+    else if (ftAvg < 18 && pr < PR_MAX && now - prLastDrop > 12000) np = Math.min(PR_MAX, pr + .1);
     if (np !== pr) { pr = np; renderer.setPixelRatio(pr); resize(); }
   }
   window.__drive = { mu: te => { mu.on = true; mu.fix = te; }, jump: u => { scrollTo(0, u * (document.documentElement.scrollHeight - innerHeight)); prog = scrollToProgress(u); vel = 0; introStart = -1e9; },
