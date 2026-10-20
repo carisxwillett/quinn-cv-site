@@ -392,7 +392,7 @@ function wrapLines(g, text, maxW) {
   const canvas = document.getElementById("scene");
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
   // resolution starts modest and adapts to the frame rate (see adaptResolution)
-  const PR_MAX = Math.min(devicePixelRatio || 1, 1.5); let pr = Math.min(PR_MAX, 1.25), ftAvg = 16, prT = 0, prLastDrop = -1e9;
+  const PR_MAX = Math.min(devicePixelRatio || 1, 1.25); let pr = Math.min(PR_MAX, 1), ftAvg = 16, prT = 0, prLastDrop = -1e9;
   renderer.setPixelRatio(pr);
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   function photo(name, rx = 1, ry = 1, fallback = "#777777", wrap = THREE.MirroredRepeatWrapping) {
@@ -1988,8 +1988,9 @@ function wrapLines(g, text, maxW) {
     put(soft(.62, .004, .006, .002, .002, MI.hard), .5, .655, -.49);
     // centre stack: touchscreen in a gloss bezel at the top, two round vents, the climate panel, then down into the console
     runX([[-.78, .44], [-.565, .44], [-.565, .62], [-.585, .80], [-.615, .925, -.598, .905], [-.70, .955, -.64, .955], [-.78, .955]], -.125, .165, MI.soft, .012);
-    put(soft(.262, .17, .022, .02, .008, MI.gloss), .02, .868, -.582, -.24);
-    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.224, .14), new THREE.MeshBasicMaterial()); scr.position.set(.02, .87, -.5695); scr.rotation.x = -.24; rig.add(scr); car.userData.screen = scr;
+    // the screen sits left of the passenger dash face, which is nearer the driver's eye and would otherwise hide its right edge
+    put(soft(.2, .13, .022, .02, .008, MI.gloss), -.02, .876, -.582, -.24);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.17, .106), new THREE.MeshBasicMaterial()); scr.position.set(-.02, .878, -.5695); scr.rotation.x = -.24; rig.add(scr); car.userData.screen = scr;
     put(soft(.25, .075, .018, .02, .007, MI.gloss), .02, .655, -.57, -.08);
     [-.06, .02, .1].forEach(x => { const k = put(new THREE.Mesh(new THREE.CylinderGeometry(.017, .019, .02, 24), MI.silver), x, .655, -.555, Math.PI / 2 - .08); });
     // round vents: a satin ring, a dark throat, three vanes and a centre knob
@@ -3023,9 +3024,10 @@ function wrapLines(g, text, maxW) {
     if (navigator.webdriver || document.hidden || ms > 250 || !cv.hidden) return;
     ftAvg = lerp(ftAvg, ms, .05); if (now - prT < 4000) return; prT = now;
     let np = pr;
-    if (ftAvg > 30 && pr > .8) { np = Math.max(.8, pr - .1); prLastDrop = now; }
-    else if (ftAvg < 18 && pr < PR_MAX && now - prLastDrop > 12000) np = Math.min(PR_MAX, pr + .1);
-    if (np !== pr) { pr = np; renderer.setPixelRatio(pr); resize(); }
+    if (ftAvg > 28 && pr > .7) { np = Math.max(.7, pr - .1); prLastDrop = now; }
+    else if (ftAvg < 15 && pr < PR_MAX && now - prLastDrop > 20000) np = Math.min(PR_MAX, pr + .1);
+    // draw straight after the resize, so the cleared canvas is never shown as a blank frame
+    if (np !== pr) { pr = np; renderer.setPixelRatio(pr); resize(); drawScene(); }
   }
   window.__drive = { mu: te => { mu.on = true; mu.fix = te; }, jump: u => { scrollTo(0, u * (document.documentElement.scrollHeight - innerHeight)); prog = scrollToProgress(u); vel = 0; introStart = -1e9; },
     order: () => order, restart: () => restart(), info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, pr, js: +cost.js.toFixed(1), gl: +cost.gl.toFixed(1) }), scene, dbg: () => ({ cam: camera.getWorldPosition(new THREE.Vector3()).toArray(), car: car.position.toArray(), diner: diner.position.toArray(), FW: FW.toArray(), RT: RT.toArray(), worker: worker.ch && worker.ch.root.getWorldPosition(new THREE.Vector3()).toArray() }) };
