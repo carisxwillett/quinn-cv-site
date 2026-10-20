@@ -23,7 +23,7 @@ body{background:var(--ink);color:var(--paper);font-family:var(--hud);font-size:1
 #scene{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
 #road{height:1800vh;position:relative;z-index:-1}
 .hud{position:fixed;z-index:5;pointer-events:none}
-.stroke{text-shadow:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 3px 6px rgba(0,0,0,.6)}
+.stroke{text-shadow:0 1px 2px rgba(0,0,0,.85),0 2px 10px rgba(0,0,0,.55)}
 
 /* top left: place */
 #place{top:calc(14px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px))}
@@ -36,6 +36,21 @@ body{background:var(--ink);color:var(--paper);font-family:var(--hud);font-size:1
 #uptime{font-family:var(--display);font-size:clamp(18px,2.4vw,26px);color:var(--cash);line-height:1.1;font-variant-numeric:tabular-nums}
 #stars{font-size:20px;letter-spacing:2px;color:var(--paper)}
 #stars small{display:block;font-size:11px;letter-spacing:.18em;font-weight:700;color:var(--muted)}
+/* quieter HUD */
+#uptime,#stars,#controls .keys{display:none}
+#place .where{font-size:clamp(20px,2.4vw,28px)}
+#place .chap{font-size:12px;color:var(--muted);letter-spacing:.14em}
+#clock{font-size:clamp(20px,2.4vw,28px)}
+#mapwrap{width:150px;height:150px;border-width:2px}
+#controls{flex-direction:row;align-items:center;gap:6px}
+#controls button{font-size:12px;padding:8px 11px;letter-spacing:.1em;background:rgba(14,11,22,.7);color:var(--paper);border:1px solid rgba(255,255,255,.25)}
+#controls #cvBtn{background:var(--paper);color:var(--ink);border-color:var(--paper)}
+#radio{top:calc(58px + env(safe-area-inset-top,0px))}
+#radio.closed .out{display:none}
+#radio .bar{padding:5px 6px 5px 11px}
+#radio .tag{font-size:11px}
+#radio button.small{font-size:11px;padding:4px 8px}
+#subs{font-size:clamp(18px,2vw,22px)}
 
 /* minimap */
 #mapwrap{left:max(16px,env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:190px;height:190px;border-radius:50%;overflow:hidden;border:3px solid rgba(0,0,0,.85);box-shadow:0 0 0 2px rgba(255,255,255,.18),0 8px 24px rgba(0,0,0,.5);background:#1d1a26}
@@ -56,7 +71,7 @@ body{background:var(--ink);color:var(--paper);font-family:var(--hud);font-size:1
 
 /* intro title */
 #intro{left:0;right:0;top:20%;text-align:center;transition:opacity .9s;padding-inline:16px}
-#intro.off{opacity:0}
+#intro.off,body.entering #intro{opacity:0}
 #intro .name{font-family:var(--display);font-size:clamp(54px,11vw,150px);line-height:.9;letter-spacing:.01em;color:var(--paper);text-transform:uppercase}
 #intro .role{font-family:var(--display);font-size:clamp(20px,3.4vw,40px);color:var(--pink);text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
 #intro .tag.snd{font-size:clamp(12px,1.4vw,14px);color:var(--sun);margin-top:14px}
@@ -108,6 +123,20 @@ button.small{padding:5px 8px;font-size:12px}
 #controls .keys{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
 
 /* loading */
+/* enter page: what this is and how to drive it, over the first frame of the drive */
+#enter{position:fixed;inset:0;z-index:21;display:grid;place-items:center;padding:24px 16px;overflow:auto;background:radial-gradient(ellipse at 50% 40%,rgba(14,11,22,.62),rgba(14,11,22,.94) 75%);transition:opacity .7s}
+#enter.off{opacity:0;pointer-events:none}
+#enter .in{max-width:560px;text-align:center}
+#enter .kick{font-weight:700;letter-spacing:.3em;text-transform:uppercase;font-size:14px;color:var(--pink)}
+#enter h1{font-family:var(--display);font-weight:400;font-size:clamp(46px,9vw,96px);line-height:.95;text-transform:uppercase;margin:8px 0 4px;color:var(--paper)}
+#enter .role{font-family:var(--display);font-size:clamp(18px,3vw,26px);color:var(--sun);text-transform:uppercase;letter-spacing:.05em}
+#enter p{font-family:var(--hud);font-size:18px;line-height:1.45;color:var(--paper);margin:18px auto 0;max-width:30em}
+#enter ul{list-style:none;padding:0;margin:16px auto 0;display:grid;gap:6px;max-width:26em;text-align:left;font-size:16px;color:var(--muted)}
+#enter li b{color:var(--paper);letter-spacing:.08em;text-transform:uppercase;font-size:14px;margin-right:6px}
+#enter .go{margin-top:24px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+#enter .go button{font-size:17px;padding:14px 22px}
+#enter #enterBtn{background:var(--sun);color:var(--ink)}
+#enter .fine{font-size:13px;color:var(--muted);margin-top:14px}
 #loading{position:fixed;inset:0;z-index:20;background:var(--ink);display:grid;place-items:center;transition:opacity .8s}
 #loading.off{opacity:0;pointer-events:none}
 #loading div{font-family:var(--display);font-size:32px;letter-spacing:.06em;color:var(--sun);text-transform:uppercase}
@@ -152,9 +181,17 @@ button.small{padding:5px 8px;font-size:12px}
 #radio .out{color:var(--paper);font-weight:700;text-decoration:none;padding:2px 6px;border:1px solid rgba(255,255,255,.3);font-size:13px;white-space:nowrap}
 #radio .out:focus-visible{outline:2px solid var(--sun)}
 #radio.closed .frame{display:none}
+#radio{width:236px;border-radius:14px;background:linear-gradient(#1a1622,#0c0a12);border:1px solid rgba(255,255,255,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 24px rgba(0,0,0,.45)}
+#radio .bar{padding:6px 8px 6px 12px}
+#radio .song{display:none}
+#radio .tag::after{content:" · KQNN 101.1";color:var(--muted);letter-spacing:.08em}
+#radio .tag{flex:1;white-space:nowrap}
+#radio .frame{aspect-ratio:auto;height:200px;min-height:200px;margin:0 8px 8px;border-radius:8px;overflow:hidden;box-shadow:0 0 0 2px #000,0 0 0 3px rgba(255,255,255,.08)}
+#radio.closed{width:auto}
 
 @media (max-width:700px){
-  #mapwrap{width:112px;height:112px}
+  #mapwrap{width:100px;height:100px}
+  #controls{flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 132px)}
   #radio{top:calc(64px + env(safe-area-inset-top,0px))}
   #card{top:calc(78px + var(--radio-h,0px) + env(safe-area-inset-top,0px));max-height:calc(100% - 290px - var(--radio-h,0px));padding:12px 14px}
   #place{max-width:calc(100% - 124px)}
@@ -178,11 +215,24 @@ button.small{padding:5px 8px;font-size:12px}
 <div id="road"></div>
 
 <div id="loading"><div>Starting the engine<small>Warming up LA</small></div></div>
+<div id="enter" role="dialog" aria-modal="true" aria-labelledby="enterName"><div class="in">
+  <div class="kick">An interactive CV</div>
+  <h1 id="enterName">Quinn Willett</h1>
+  <div class="role" id="enterRole">Senior Systems Administrator</div>
+  <p>Ride along with Quinn through Los Angeles at sunset in his MG, with his friend Dani in the passenger seat. Each stretch of road is a chapter of his career, and the drive ends at a burger drive-thru where his full CV is handed over.</p>
+  <ul>
+    <li><b>Scroll</b>or swipe up to drive, and back to reverse</li>
+    <li><b>Drag</b>to look around the car</li>
+    <li><b>Sound</b>engine noise and the radio, best with headphones</li>
+  </ul>
+  <div class="go"><button id="enterBtn">Enter the experience</button><button id="enterQuiet" class="ghost">Enter without sound</button></div>
+  <div class="fine">In a hurry? <a href="#" id="enterCV" style="color:var(--paper)">Read the CV now</a></div>
+</div></div>
 
 <div id="place" class="hud stroke"><div class="where" id="where">Harbor Freeway</div><div class="chap" id="chap">Chapter 1 · The Pickup</div></div>
 <div id="stats" class="hud stroke"><div id="clock">6:12 PM</div><div id="uptime">UPTIME 99.99%</div><div id="stars">★★★★☆<small>On-call level</small></div></div>
 <div id="mapwrap" class="hud"><canvas id="minimap" width="380" height="380"></canvas></div>
-<div id="intro" class="hud stroke"><div class="name" id="introName">Quinn</div><div class="role" id="introRole">Systems Administrator</div><div class="tag">A drive through Los Angeles</div><div class="tag snd">Click or tap anywhere for engine and radio</div></div>
+<div id="intro" class="hud stroke"><div class="name" id="introName">Quinn</div><div class="role" id="introRole">Systems Administrator</div><div class="tag">A drive through Los Angeles</div></div>
 <div id="banner" class="hud stroke"><div class="n" id="bannerN">Chapter 2</div><div class="t" id="bannerT">Player Profile</div><div class="r" id="bannerR"></div></div>
 <div id="subs" class="hud stroke" aria-live="polite"></div>
 <div id="hint" class="hud stroke"><span class="mouse"></span><span>Scroll to drive</span></div>
@@ -191,7 +241,7 @@ button.small{padding:5px 8px;font-size:12px}
   <span class="keys stroke">Drag to look · hold R to look right</span>
   <button id="lookBtn" class="ghost">Look at Dani</button>
   <button id="soundBtn" class="ghost" aria-pressed="false">Sound: off</button>
-  <button id="cvBtn">Read the full CV</button>
+  <button id="cvBtn">Full CV</button>
 </div>
 <section id="cv" hidden aria-label="Quinn's CV"></section>
 <div id="radio" class="hud closed" hidden aria-label="Radio">
@@ -282,8 +332,8 @@ const LINES = [
 ];
 /* the drive-thru: seconds after pulling up to the window */
 const ORDER_LINES = [
-  [.7, 6.0, "Quinn", "Can I get 2 number 9's, a number 9 large, a number 6 with extra dip, two number 45s, one with fries, and a large soda."],
-  [6.2, 8.3, "worker", "I can do you one better."]
+  [.7, 10.9, "Quinn", "Can I get 2 number 9's, a number 9 large, a number 6 with extra dip, two number 45s, one with fries, and a large soda."],
+  [11.0, 13.1, "worker", "I can do you one better."]
 ];
 const BILLBOARD_P = [.205, .245, .285, .325, .365, .405];
 const JOB_STOP = [[.505, .52], [.585, .6], [.665, .68]];
@@ -340,7 +390,7 @@ function wrapLines(g, text, maxW) {
 
   /* ------------------------------ renderer ------------------------------ */
   const canvas = document.getElementById("scene");
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
   // resolution starts modest and adapts to the frame rate (see adaptResolution)
   const PR_MAX = Math.min(devicePixelRatio || 1, 1.5); let pr = Math.min(PR_MAX, 1.25), ftAvg = 16, prT = 0, prLastDrop = -1e9;
   renderer.setPixelRatio(pr);
@@ -529,7 +579,11 @@ function wrapLines(g, text, maxW) {
 
   /* far mountains: flat silhouettes that sit in the haze */
   const mountMat = new THREE.MeshBasicMaterial({ color: 0x5b3f6b, fog: false });
-  const mountGeo = new THREE.ConeGeometry(1, 1, 7, 1); mountGeo.translate(0, 0.5, 0);
+  const mountGeo = new THREE.ConeGeometry(1, 1, 20, 6); mountGeo.translate(0, 0.5, 0);
+  { const pa = mountGeo.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i), a = Math.atan2(z, x);
+      if (y > .999 || y < .001) { if (y > .999) pa.setY(i, .93); continue; }
+      const k = 1 + .2 * Math.sin(3 * a + 1.3) + .1 * Math.sin(7 * a + .4) + .06 * Math.sin(13 * a + 2.1), h = y * (1 + .16 * Math.sin(5 * a + 2.7 + y * 3) * Math.sin(Math.PI * y));
+      pa.setXYZ(i, x * k, Math.min(1, h), z * k); } mountGeo.computeVertexNormals(); }
   const mountains = new THREE.InstancedMesh(mountGeo, mountMat, 70);
   { const d = new THREE.Object3D(); let k = 0;
     for (let i = 0; i < 140 && k < 70; i++) {
@@ -708,44 +762,121 @@ function wrapLines(g, text, maxW) {
   const addB = (x, z, w, d, h, yaw, tower, y = 0) => { const b = { x, z, w, d, h, yaw, tower, y }; bList.push(b); return b; };
   // which local x face (+1/-1) looks at the street: the street is `dir` from the building
   const faceTo = (b, dx, dz) => Math.sign(dx * Math.cos(b.yaw) - dz * Math.sin(b.yaw)) || 1;
-  for (let dd = 40; dd < L - 180; dd += rr(16, 30)) {
-    const p = dd / L;
-    for (const side of [-1, 1]) {
-      const freeway = p < .085 || (p > .46 && p < .74);
-      if (freeway && rnd() < .55) continue;
-      const w = rr(12, 26), d = rr(12, 24), back = (freeway ? 30 : 16) + rr(0, 14) + d / 2;
-      const a = at(p), pos = a.pos.clone().add(a.right.clone().multiplyScalar(side * back));
-      if (pos.z < COAST_Z - 2) continue;
-      if (!clearOfRoad(pos, Math.hypot(w, d) / 2 + 4)) continue;
-      const yaw = Math.atan2(-a.tan.x, -a.tan.z);
-      const b = addB(pos.x, pos.z, w, d, freeway ? rr(6, 16) : rr(7, 26) * (rnd() < .12 ? 2 : 1), yaw, false);
-      b.fw = freeway; b.front = faceTo(b, -side * a.right.x, -side * a.right.z);
+  // The r5 layout still runs, on a scratch list, so the shared rnd() sequence after the city comes out exactly as before.
+  // Only its downtown towers and the buildings past the end of the route are kept; the street frontage is laid out below.
+  const oList = [];
+  { const addO = (x, z, w, d, h, yaw, tower, y = 0) => { const b = { x, z, w, d, h, yaw, tower, y }; oList.push(b); return b; };
+    for (let dd = 40; dd < L - 180; dd += rr(16, 30)) {
+      const p = dd / L;
+      for (const side of [-1, 1]) {
+        const freeway = p < .085 || (p > .46 && p < .74);
+        if (freeway && rnd() < .55) continue;
+        const w = rr(12, 26), d = rr(12, 24), back = (freeway ? 30 : 16) + rr(0, 14) + d / 2;
+        const a = at(p), pos = a.pos.clone().add(a.right.clone().multiplyScalar(side * back));
+        if (pos.z < COAST_Z - 2) continue;
+        if (!clearOfRoad(pos, Math.hypot(w, d) / 2 + 4)) continue;
+        const yaw = Math.atan2(-a.tan.x, -a.tan.z);
+        const b = addO(pos.x, pos.z, w, d, freeway ? rr(6, 16) : rr(7, 26) * (rnd() < .12 ? 2 : 1), yaw, false);
+        b.fw = freeway; b.front = faceTo(b, -side * a.right.x, -side * a.right.z);
+      }
     }
+    for (let dd = L + 60; dd < L + EXT * STEP - 30; dd += rr(16, 28)) {
+      const a = atX(dd), w = rr(12, 24), d = rr(12, 22), pos = a.pos.clone().add(a.right.clone().multiplyScalar(-(18 + rr(0, 12) + d / 2)));
+      const b = addO(pos.x, pos.z, w, d, rr(7, 22), Math.atan2(-a.tan.x, -a.tan.z), false);
+      b.fw = false; b.ext = true; b.front = faceTo(b, a.right.x, a.right.z);
+    }
+    // downtown towers
+    for (let i = 0; i < 150; i++) {
+      const x = 300 + rr(-170, 170), z = -560 + rr(-150, 150), w = rr(22, 40), d = rr(22, 40);
+      const v = new THREE.Vector3(x, 0, z);
+      if (!clearOfRoad(v, Math.hypot(w, d) / 2 + 12)) continue;
+      if (oList.some(b => b.tower && Math.hypot(b.x - x, b.z - z) < 30)) continue;
+      const dc = Math.hypot(x - 300, z - 560 + 0);
+      addO(x, z, w, d, rr(50, 120) + 120 * Math.max(0, 1 - Math.hypot(x - 320, z + 600) / 200), 0, true);
+    }
+    // stepped tops on taller buildings so the skyline isn't all plain boxes
+    oList.slice().forEach(b => { if (b.h > 18 && rnd() < .7) { const k = rr(.55, .8); addO(b.x, b.z, b.w * k, b.d * k, b.h * rr(.25, .5), b.yaw, b.tower, b.h).up = b; b.capped = true;
+      if (b.tower && rnd() < .6) addO(b.x, b.z, b.w * k * .6, b.d * k * .6, b.h * .2, b.yaw, true, b.h * 1.4).up = b; } });
+    // the instancing used to take two calls a building and the rooftop units fifteen a roof
+    const roofs = new Set(oList.map(b => b.x + "," + b.z)).size; for (let k = oList.length * 2 + roofs * 15; k > 0; k--) rnd(); }
+  const SEED_CITY = seed;
+  { const keep = new Set(oList.filter(b => b.tower || b.ext)); oList.forEach(b => { if (b.up && keep.has(b.up)) keep.add(b); }); oList.forEach(b => { if (keep.has(b)) bList.push(b); }); }
+
+  /* street frontage. Each side of the road is cut into parcels: shops right up to the back of the sidewalk, strip malls
+     behind a striped lot, the odd fenced lot, and on the freeways houses and low apartments behind a sound wall. Two more
+     rows stand behind the frontage so the ground never shows. All of it uses its own generator (lr). */
+  const lr = (() => { let q = 60606; return () => (q = (q * 16807) % 2147483647) / 2147483647; })(), lrr = (a, b) => a + (b - a) * lr();
+  const RG = new Map(), RC = 16, rk = (i, j) => i * 65536 + j;
+  PX.forEach(q => { const k = rk(Math.floor(q.x / RC), Math.floor(q.z / RC)); if (!RG.has(k)) RG.set(k, []); RG.get(k).push(q); });
+  // distance to the road's centre line (exact below ~16 m, which is all that matters)
+  const roadDist = (x, z) => { let m = 1e9; const ci = Math.floor(x / RC), cj = Math.floor(z / RC);
+    for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) { const A = RG.get(rk(i, j)); if (A) for (const q of A) m = Math.min(m, (q.x - x) * (q.x - x) + (q.z - z) * (q.z - z)); }
+    return Math.sqrt(m); };
+  // footprints: oriented rectangles (local x across the road = w, local z along it = d), kept in a coarse grid
+  const fp = (x, z, w, d, yaw) => ({ x, z, hw: w / 2, hd: d / 2, c: Math.cos(yaw), s: Math.sin(yaw), r: Math.hypot(w, d) / 2 });
+  const fpCorners = f => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, k]) => [f.x + i * f.hw * f.c + k * f.hd * f.s, f.z - i * f.hw * f.s + k * f.hd * f.c]);
+  const overlap = (A, B) => { if (Math.hypot(A.x - B.x, A.z - B.z) > A.r + B.r) return false;
+    for (const [ax, az] of [[A.c, -A.s], [A.s, A.c], [B.c, -B.s], [B.s, B.c]]) {
+      const ra = A.hw * Math.abs(A.c * ax - A.s * az) + A.hd * Math.abs(A.s * ax + A.c * az), rb = B.hw * Math.abs(B.c * ax - B.s * az) + B.hd * Math.abs(B.s * ax + B.c * az);
+      if (Math.abs((B.x - A.x) * ax + (B.z - A.z) * az) >= ra + rb) return false; }
+    return true; };
+  const OG = new Map(), OC = 48;
+  const cellsOf = f => { const out = []; for (let i = Math.floor((f.x - f.r) / OC); i <= Math.floor((f.x + f.r) / OC); i++) for (let j = Math.floor((f.z - f.r) / OC); j <= Math.floor((f.z + f.r) / OC); j++) out.push(rk(i, j)); return out; };
+  const taken = f => cellsOf(f).some(k => (OG.get(k) || []).some(g => overlap(f, g)));
+  const occupy = f => cellsOf(f).forEach(k => { if (!OG.has(k)) OG.set(k, []); OG.get(k).push(f); });
+  bList.forEach(b => { if (!b.up) occupy(fp(b.x, b.z, b.w, b.d, b.yaw)); });
+  // set pieces stay clear: the Sunset billboards, the downtown LED banner and Byte Burger's lot
+  const boards = BILLBOARD_P.map((bp, i) => place(bp, (i % 2 ? -1 : 1) * 15));
+  boards.forEach(q => occupy(fp(q.x, q.z, 20, 20, 0)));
+  { const q = place(.14, 17); occupy(fp(q.x, q.z, 16, 16, 0)); }
+  { const q = endP(-55, -24); occupy(fp(q.x, q.z, 36, 200, Math.atan2(-FW.x, -FW.z))); }
+  const tryB = (x, z, w, d, h, yaw, minRoad) => {
+    const f = fp(x, z, w, d, yaw), C = fpCorners(f);
+    if (C.some(q => q[1] < COAST_Z + 6)) return null;
+    for (let e = 0; e < 4; e++) { const [ax, az] = C[e], [bx, bz] = C[(e + 1) % 4], n = Math.ceil(Math.hypot(bx - ax, bz - az) / 3);
+      for (let k = 0; k < n; k++) if (roadDist(ax + (bx - ax) * k / n, az + (bz - az) * k / n) < minRoad) return null; }
+    const g = fp(x, z, w - .2, d - .2, yaw); if (taken(g)) return null;
+    occupy(g); return addB(x, z, w, d, h, yaw, false);
+  };
+  const ZN = p => p < .085 || (p > .46 && p < .74) ? 0 : p < .18 ? 1 : 2; // 0 freeway, 1 downtown, 2 boulevard
+  const lots = [], fronts = [], fences = [];
+  for (const s of [-1, 1]) for (let dd = 30; dd < L - 186;) {
+    const zn = ZN(dd / L), beach = s > 0 && dd / L > .755;
+    const kind = zn === 0 ? "res" : zn === 1 ? "shop" : beach ? (lr() < .35 ? "gap" : "beach") : (r => r < .24 ? "mall" : r < .31 ? "gap" : "shop")(lr());
+    let len = kind === "mall" ? lrr(40, 62) : kind === "gap" ? lrr(7, 13) : kind === "res" ? lrr(12, 20) : kind === "beach" ? lrr(12, 22) : zn === 1 ? lrr(18, 32) : lrr(12, 26);
+    for (let t = 2; t < len; t += 2) if (ZN((dd + t) / L) !== zn) { len = Math.max(t, 4); break; } // parcels never straddle a chapter change
+    const a = at((dd + len / 2) / L), yaw = Math.atan2(-a.tan.x, -a.tan.z), R = a.right.clone().multiplyScalar(s);
+    const put = (lat, w, dl, h, row) => { for (let t = 0; t < 4; t++) { const l = lat + t * 1.5, q = a.pos.clone().addScaledVector(R, l + w / 2);
+        const b = tryB(q.x, q.z, w, dl * (1 - t * .1), h, yaw, 12.2); if (b) { b.front = faceTo(b, -R.x, -R.z); b.fw = zn === 0; b.zn = zn; b.kind = kind; b.row = row; b.lat = l; return b; } } return null; };
+    let back = 12.3 + lrr(3, 9); // where the rows behind start when nothing stands at the front
+    if (kind === "shop") { const w = zn === 1 ? lrr(16, 28) : lrr(12, 22), b = put(12.3 + (zn === 2 && lr() < .25 ? lrr(.6, 3) : 0), w, len - (lr() < .3 ? lrr(1.2, 3.5) : .25), zn === 1 ? lrr(12, 34) * (lr() < .25 ? 1.7 : 1) : lrr(7, 24) * (lr() < .1 ? 1.8 : 1), 1);
+      if (b) { back = b.lat + w; fronts.push({ a, s, len: b.d, zn }); } }
+    else if (kind === "mall") { const w = lrr(12, 16), b = put(12.3 + lrr(17, 22), w, len - lrr(2, 5), 5, 1);
+      if (b) { back = b.lat + w; lots.push({ a, s, len: b.d, lat0: 12.3, lat1: b.lat }); } }
+    else if (kind === "res") { const lat = lrr(18, 22), w = lrr(10, 16), b = put(lat, w, len - lrr(1.5, 5), lrr(5.5, 10), 1); back = (b ? b.lat : lat) + w; }
+    else if (kind === "beach") { put(27, lrr(10, 15), len - lrr(2, 6), lrr(4.5, 8), 1); back = 1e9; }
+    else if (zn === 2) fences.push({ a, s, len });
+    if (back < 1e8) {
+      const lat2 = back + lrr(1, 5), w2 = lrr(12, 24), b2 = put(lat2, w2, len * lrr(.75, 1), zn === 1 ? lrr(22, 60) : zn === 2 ? lrr(8, 28) : lrr(6, 11), 2);
+      let lat = (b2 ? b2.lat : lat2) + w2;
+      if (lr() < .8) { const w3 = lrr(14, 28), b3 = put(lat + lrr(3, 10), w3, len * lrr(.7, 1), zn === 1 ? lrr(30, 80) : zn === 2 ? lrr(10, 36) : lrr(7, 14) * (lr() < .12 ? 1.8 : 1), 3); lat = (b3 ? b3.lat : lat + 6) + w3; }
+      // and a looser row further out, so the gaps never open onto bare ground
+      if (lr() < .75) put(lat + lrr(4, 14), lrr(16, 32), len * lrr(.6, 1), zn === 1 ? lrr(25, 70) : zn === 2 ? lrr(9, 30) : lrr(7, 16), 4);
+    }
+    dd += len;
   }
-  for (let dd = L + 60; dd < L + EXT * STEP - 30; dd += rr(16, 28)) {
-    const a = atX(dd), w = rr(12, 24), d = rr(12, 22), pos = a.pos.clone().add(a.right.clone().multiplyScalar(-(18 + rr(0, 12) + d / 2)));
-    const b = addB(pos.x, pos.z, w, d, rr(7, 22), Math.atan2(-a.tan.x, -a.tan.z), false);
-    b.fw = false; b.front = faceTo(b, a.right.x, a.right.z);
-  }
-  // downtown towers
-  for (let i = 0; i < 150; i++) {
-    const x = 300 + rr(-170, 170), z = -560 + rr(-150, 150), w = rr(22, 40), d = rr(22, 40);
-    const v = new THREE.Vector3(x, 0, z);
-    if (!clearOfRoad(v, Math.hypot(w, d) / 2 + 12)) continue;
-    if (bList.some(b => b.tower && Math.hypot(b.x - x, b.z - z) < 30)) continue;
-    const dc = Math.hypot(x - 300, z - 560 + 0);
-    addB(x, z, w, d, rr(50, 120) + 120 * Math.max(0, 1 - Math.hypot(x - 320, z + 600) / 200), 0, true);
-  }
-  // stepped tops on taller buildings so the skyline isn't all plain boxes
-  bList.slice().forEach(b => { if (b.h > 18 && rnd() < .7) { const k = rr(.55, .8); addB(b.x, b.z, b.w * k, b.d * k, b.h * rr(.25, .5), b.yaw, b.tower, b.h).up = b; b.capped = true;
-    if (b.tower && rnd() < .6) addB(b.x, b.z, b.w * k * .6, b.d * k * .6, b.h * .2, b.yaw, true, b.h * 1.4).up = b; } });
+  // stepped tops on the new taller buildings
+  bList.forEach(b => { if (b.row && b.h > 18 && lr() < .6) { const k = lrr(.55, .8); addB(b.x, b.z, b.w * k, b.d * k, b.h * lrr(.25, .5), b.yaw, false, b.h).up = b; b.capped = true; } });
   // what each building is: 0 strip shops (one or two storeys, false front), 1 stucco block, 2 brick block, 3 glass tower.
-  // Street-side ground floors are split into shop units (b.shop = unit width).
+  // Street-side ground floors are split into shop units (b.shop = unit width); the rows behind and the houses have none.
   bList.forEach(b => {
     if (b.tower) { b.type = 3; b.front = 0; b.shop = 0; return; }
     if (b.up) { b.type = b.up.type; b.front = 0; b.shop = 0; return; }
     b.type = crnd() < .3 ? 2 : 1;
-    if (!b.capped && !b.fw && crnd() < .42) { b.type = 0; b.h = crnd() < .6 ? cr(4.9, 5.8) : cr(8.1, 9); }
+    if (b.row > 1 || b.kind === "res") { b.shop = 0; if (b.row > 1) b.front = 0; return; }
+    if (b.kind === "mall") { b.type = 0; b.h = cr(4.9, 5.8); }
+    else if (b.kind === "beach") { if (crnd() < .55) { b.type = 0; b.h = cr(4.9, 6.2); } }
+    else if (!b.capped && !b.fw && b.zn !== 1 && crnd() < .42) { b.type = 0; b.h = crnd() < .6 ? cr(4.9, 5.8) : cr(8.1, 9); }
     else if (!b.capped && b.fw && crnd() < .3) { b.type = 0; b.h = cr(4.9, 6.5); }
     const shops = b.type === 0 || crnd() < (b.fw ? .3 : .85);
     b.shop = shops && b.d > 6 ? b.d / Math.max(1, Math.round(b.d / cr(6.5, 9))) : 0;
@@ -847,10 +978,10 @@ function wrapLines(g, text, maxW) {
 
   // roofs: parapets, cornices, strip-mall false fronts, sign posts and AC units, merged into one mesh
   { const roofTop = new Map(); bList.forEach(b => { const key = b.x + "," + b.z; const top = b.y + b.h; if (!roofTop.has(key) || roofTop.get(key).top < top) roofTop.set(key, { b, top }); });
-    const units = []; roofTop.forEach(({ b, top }) => { for (let k = 0; k < 3; k++) units.push({ b, top, ox: rr(-.35, .35) * b.w, oz: rr(-.35, .35) * b.d, s: rr(1.2, 3), h: rr(.8, 2.2) }); });
+    const units = []; roofTop.forEach(({ b, top }) => { for (let k = 0; k < (b.row > 1 ? 1 : 3); k++) units.push({ b, top, ox: rr(-.35, .35) * b.w, oz: rr(-.35, .35) * b.d, s: rr(1.2, 3), h: rr(.8, 2.2) }); });
     const AC = new THREE.Color(0x8d8a86), CONC = new THREE.Color(0xd8d2c6);
     units.forEach(u => roofKit.push([u.b, u.ox, u.top + u.h / 2, u.oz, u.s, u.h, u.s * rr(.7, 1.4), AC]));
-    bList.forEach(b => { const top = b.y + b.h, t = .3, ph = b.tower ? 1.4 : .9, cp = b.col.clone().multiplyScalar(b.type === 2 ? .8 : .88);
+    bList.forEach(b => { if (b.row > 2) return; const top = b.y + b.h, t = .3, ph = b.tower ? 1.4 : .9, cp = b.col.clone().multiplyScalar(b.type === 2 ? .8 : .88);
       roofKit.push([b, b.w / 2 - t / 2, top + ph / 2, 0, t, ph, b.d, cp], [b, -b.w / 2 + t / 2, top + ph / 2, 0, t, ph, b.d, cp],
         [b, 0, top + ph / 2, b.d / 2 - t / 2, b.w - 2 * t, ph, t, cp], [b, 0, top + ph / 2, -b.d / 2 + t / 2, b.w - 2 * t, ph, t, cp]);
       if (b.type < 3) roofKit.push([b, 0, top - .3, 0, b.w + .5, .36, b.d + .5, b.type === 2 ? CONC : b.col.clone().lerp(CONC, .6)]);
@@ -867,6 +998,131 @@ function wrapLines(g, text, maxW) {
     const rg = new THREE.BufferGeometry(); rg.setAttribute("position", new THREE.BufferAttribute(pos, 3)); rg.setAttribute("normal", new THREE.BufferAttribute(nor, 3)); rg.setAttribute("color", new THREE.BufferAttribute(cl, 3)); rg.setIndex(new THREE.BufferAttribute(idx, 1));
     const roof = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ vertexColors: true })); roof.frustumCulled = false;
     scene.add(roof); }
+  seed = SEED_CITY; // hand the shared sequence on exactly where the old city left it
+
+  /* street level: concrete from the kerb to the shopfronts, striped strip-mall lots with parked cars, sound walls on the
+     freeways, and street furniture. A few merged meshes. */
+  { const ZI = i => ZN(Math.min(i, N) / N), Y = .135;
+    // ground bands: a [lat0, lat1] strip along the route; the outer edge stops short of the beach
+    const band = (i0, i1, s, lat0, lat1, y, mat, uM, vM) => {
+      const pos = [], uv = [], idx = [];
+      for (let i = i0; i <= i1; i++) { const q = PX[i], r = RX[i];
+        let out = lat1; const rz = r.z * s; if (rz < -.01) out = clamp((q.z - COAST_Z - 3) / -rz, lat0, lat1);
+        const a = s < 0 ? -out : lat0, b = s < 0 ? -lat0 : out;
+        pos.push(q.x + r.x * a, y, q.z + r.z * a, q.x + r.x * b, y, q.z + r.z * b); uv.push(a / uM, i * STEP / vM, b / uM, i * STEP / vM);
+        if (i < i1) { const k = (i - i0) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); } }
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+      g.setIndex(idx); g.computeVertexNormals(); const m = new THREE.Mesh(g, mat); scene.add(m); return m; };
+    const runs = (s, test, iEnd) => { const out = []; let a = -1; for (let i = 0; i <= iEnd; i++) { const on = test(i); if (on && a < 0) a = i; if ((!on || i === iEnd) && a >= 0) { out.push([a, on ? i : i - 1]); a = -1; } } return out; };
+    const concrete = new THREE.MeshLambertMaterial({ color: 0xc9bfb0, map: photo("paving", 1, 1, "#9c9388") });
+    const beachSand = new THREE.MeshLambertMaterial({ color: 0xf2e2c8, map: photo("sand", 1, 1, "#d9bf92") });
+    for (const s of [-1, 1]) {
+      const iEnd = s < 0 ? iLotA - 1 : N;
+      runs(s, i => ZI(i) !== 0 && !(s > 0 && i / N > .755), iEnd).forEach(([a, b]) => band(a, b, s, 12, 70, Y, concrete, 5, 5));
+      if (s > 0) runs(s, i => i / N > .755, iEnd).forEach(([a, b]) => band(a, b, s, 12, 34, Y, beachSand, 12, 12));
+    }
+    // sound walls along the freeways: block courses, a cap and ivy climbing from the foot
+    const wallTex = canvasTex(256, 128, (g, w, h) => {
+      g.fillStyle = "#cdbfa6"; g.fillRect(0, 0, w, h);
+      for (let r = 0; r < 8; r++) for (let c = -1; c < 6; c++) { const x = c * 48 + (r % 2) * 24 + 1, y = 12 + r * 14.5; g.fillStyle = `hsl(36, ${14 + (r * 7 + c * 13) % 9}%, ${68 + (r * 5 + c * 11) % 9}%)`; g.fillRect(x, y, 46, 13); }
+      g.fillStyle = "#a99c86"; g.fillRect(0, 0, w, 11); g.fillStyle = "#e0d6c2"; g.fillRect(0, 9, w, 2);
+      for (let k = 0; k < 900; k++) { const x = Math.random() * w, y = h - Math.pow(Math.random(), 1.6) * h * (.45 + .4 * Math.sin(x / w * Math.PI * 6) ** 2); g.fillStyle = `hsla(${95 + Math.random() * 30}, 40%, ${18 + Math.random() * 16}%, .9)`; g.beginPath(); g.arc(x, y, 1.5 + Math.random() * 2.5, 0, 7); g.fill(); } });
+    wallTex.wrapS = THREE.RepeatWrapping;
+    { const pos = [], uv = [], idx = [], H = 4.2;
+      for (const s of [-1, 1]) runs(s, i => ZI(i) === 0, N).forEach(([i0, i1]) => { for (let i = i0; i <= i1; i++) { const q = PX[i], r = RX[i], k = pos.length / 3;
+        pos.push(q.x + r.x * s * 15.6, 0, q.z + r.z * s * 15.6, q.x + r.x * s * 15.6, H, q.z + r.z * s * 15.6); uv.push(i * STEP / 9.6, 0, i * STEP / 9.6, 1);
+        if (i < i1) idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); } });
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: wallTex, side: THREE.DoubleSide }))); }
+
+    // strip-mall lots: one stall (2.7 m) across the texture, 24 m deep from the shopfronts: a row of stalls against the
+    // building, a drive aisle, a second row facing the street and a strip to the kerb
+    const lotTex = canvasTex(128, 512, (g, w, h) => { const m = h / 24;
+      g.fillStyle = "#4a494f"; g.fillRect(0, 0, w, h);
+      for (let k = 0; k < 500; k++) { g.fillStyle = `rgba(${Math.random() < .5 ? "20,20,24" : "120,118,122"},${.05 + Math.random() * .08})`; g.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 10, 2 + Math.random() * 10); }
+      g.fillStyle = "rgba(15,15,18,.35)"; [[2.6], [14.4]].forEach(([v]) => { g.beginPath(); g.ellipse(w / 2, v * m, 18, 34, 0, 0, 7); g.fill(); });
+      g.fillStyle = "#e9e5da"; g.fillRect(0, .25 * m, 4, 5.3 * m); g.fillRect(w - 4, .25 * m, 4, 5.3 * m); g.fillRect(0, 11.6 * m, 4, 5.3 * m); g.fillRect(w - 4, 11.6 * m, 4, 5.3 * m);
+      g.fillStyle = "#3f6fb5"; g.fillRect(0, 0, w, .25 * m); });
+    lotTex.wrapS = THREE.RepeatWrapping;
+    const kit = [], parked = [], fenceQ = [];
+    // a box in a parcel's frame: lat across (signed by side), along the road, y up
+    const kb = (a, s, lat, al, y, sx, sy, sz, col) => { const q = a.pos.clone().addScaledVector(a.right, s * lat).addScaledVector(a.tan, al); kit.push([q.x, y, q.z, Math.atan2(-a.tan.x, -a.tan.z), sx, sy, sz, new THREE.Color(col)]); };
+    { const pos = [], uv = [], idx = [];
+      lots.forEach(({ a, s, len, lat0, lat1 }) => { const R = a.right.clone().multiplyScalar(s), k = pos.length / 3;
+        [[lat0, -len / 2], [lat1, -len / 2], [lat0, len / 2], [lat1, len / 2]].forEach(([l, al]) => { const q = a.pos.clone().addScaledVector(R, l).addScaledVector(a.tan, al); pos.push(q.x, Y + .02, q.z); uv.push(al / 2.7, (lat1 - l) / 24); });
+        idx.push(...(s > 0 ? [k, k + 1, k + 2, k + 1, k + 3, k + 2] : [k, k + 2, k + 1, k + 1, k + 2, k + 3]));
+        // parked cars, nose in (a few backed in), clear of the billboards
+        const n = Math.floor(len / 2.7);
+        for (const lc of [lat1 - 2.75, lat1 - 14.3]) for (let j = 0; j < n; j++) { if (lr() > .5 || lc < 14) continue;
+          const al = -len / 2 + (j + .5) * 2.7, q = a.pos.clone().addScaledVector(R, lc).addScaledVector(a.tan, al);
+          if (boards.some(b => Math.hypot(b.x - q.x, b.z - q.z) < 8)) continue;
+          parked.push({ q, yaw: Math.atan2(-R.x, -R.z) + (lr() < .2 ? Math.PI : 0) + lrr(-.05, .05), k: Math.floor(lr() * 3), c: lr() });
+        }
+        // hedge strip along the kerb with two driveways, and a pylon sign at the near end
+        const dw = lrr(.15, .3) * len; [[-len / 2, -len / 2 + dw - 3.5], [-len / 2 + dw + 3.5, len / 2 - dw - 3.5], [len / 2 - dw + 3.5, len / 2]].forEach(([u0, u1]) => { if (u1 - u0 > .6) kb(a, s, 12.85, (u0 + u1) / 2, Y + .38, 1, .75, u1 - u0, 0x3f5a33); });
+        const sc = [0xd62828, 0x1d3557, 0xf77f00, 0x2a9d8f, 0x7b2cbf][Math.floor(lr() * 5)], pa = -len / 2 + dw / 2;
+        kb(a, s, 14, pa, 3.6, .4, 7, .4, 0x5a5a5e); kb(a, s, 14, pa, 7.2, 3.4, 2.4, .45, sc); kb(a, s, 14, pa, 7.2, 3.5, .5, .5, 0xf2efe6);
+      });
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: lotTex }))); }
+    // sidewalk furniture along the shopfronts: meters and hydrants at the kerb, bins and news racks by the buildings,
+    // and every couple of hundred metres a bus bench with an ad on its back and a stop sign
+    let nextBus = 0;
+    fronts.forEach(({ a, s, len }) => { const d0 = -len / 2;
+      if (lr() < .75) for (let u = d0 + 2; u < len / 2 - 1; u += 6.5) { kb(a, s, 8.75, u, Y + .55, .08, 1.1, .08, 0x4a4c50); kb(a, s, 8.75, u, Y + 1.25, .17, .3, .13, 0x8d9299); }
+      if (lr() < .25) { const u = lrr(d0 + 1, -d0 - 1); kb(a, s, 8.8, u, Y + .3, .26, .6, .26, 0xe2b81e); kb(a, s, 8.8, u, Y + .63, .34, .07, .34, 0xc49c12); }
+      if (lr() < .5) { const u = lrr(d0 + 1, -d0 - 1); kb(a, s, 11.3, u, Y + .47, .56, .94, .56, 0x2d4636); kb(a, s, 11.3, u, Y + .96, .62, .06, .62, 0x1f2a24); }
+      if (lr() < .18) { const u = lrr(d0 + 1, -d0 - 2); kb(a, s, 11.5, u, Y + .52, .45, 1.04, .42, 0xb3262e); kb(a, s, 11.5, u + .5, Y + .52, .45, 1.04, .42, 0x2b5797); }
+      if (++nextBus > 7 + (s > 0 ? 2 : 0)) { nextBus = 0; const u = lrr(d0 + 2, -d0 - 3), ad = [0xf2c230, 0xd62828, 0x2f6fb2, 0xff5d8f, 0x2a9d8f][Math.floor(lr() * 5)];
+        kb(a, s, 11.25, u, Y + .45, .5, .08, 2.1, 0x6b6d72); kb(a, s, 11.5, u, Y + .82, .07, .62, 2.15, ad); kb(a, s, 11.5, u, Y + .82, .04, .5, 1.9, 0xf4f1ea);
+        kb(a, s, 11.3, u - .9, Y + .22, .45, .44, .06, 0x3c3d42); kb(a, s, 11.3, u + .9, Y + .22, .45, .44, .06, 0x3c3d42);
+        kb(a, s, 8.8, u + 2.5, Y + 1.4, .07, 2.8, .07, 0x55575c); kb(a, s, 8.8, u + 2.5, Y + 2.55, .5, .46, .04, 0xe8731c); kb(a, s, 8.8, u + 2.5, Y + 2.2, .5, .16, .04, 0xf4f1ea); }
+    });
+    // empty lots between shops are fenced off with chain link
+    fences.forEach(({ a, s, len }) => { const R = a.right.clone().multiplyScalar(s), l = len - 1.2;
+      for (let u = -l / 2; u <= l / 2 + .01; u += l / Math.max(1, Math.round(l / 3))) kb(a, s, 12.6, u, Y + 1, .07, 2, .07, 0x8e9196);
+      kb(a, s, 12.6, 0, Y + 2.02, .05, .05, l, 0x8e9196);
+      const p0 = a.pos.clone().addScaledVector(R, 12.6).addScaledVector(a.tan, -l / 2), p1 = a.pos.clone().addScaledVector(R, 12.6).addScaledVector(a.tan, l / 2); fenceQ.push([p0, p1, l]); });
+    if (fenceQ.length) { const chain = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = "rgba(170,174,180,1)"; g.lineWidth = 2.2;
+        for (let k = -64; k < 128; k += 16) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + 64, 64); g.moveTo(k + 64, 0); g.lineTo(k, 64); g.stroke(); } });
+      chain.wrapS = chain.wrapT = THREE.RepeatWrapping;
+      const pos = [], uv = [], idx = [];
+      fenceQ.forEach(([p0, p1, l]) => { const k = pos.length / 3; pos.push(p0.x, Y, p0.z, p1.x, Y, p1.z, p0.x, Y + 2, p0.z, p1.x, Y + 2, p1.z); uv.push(0, 0, l / .9, 0, 0, 2 / .9, l / .9, 2 / .9); idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); });
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: chain, alphaTest: .4, side: THREE.DoubleSide }))); }
+    // every box above merged into one mesh (bottom faces dropped)
+    { const bx = new THREE.BoxGeometry(1, 1, 1), BP = bx.attributes.position.array, BN = bx.attributes.normal.array, BI = Array.from(bx.index.array).filter((_, k) => Math.floor(k / 6) !== 3);
+      const keepV = [...new Set(BI)].sort((x, y) => x - y), remap = new Map(keepV.map((v, k) => [v, k])), BI2 = BI.map(v => remap.get(v)), nv = keepV.length;
+      const pos = new Float32Array(kit.length * nv * 3), nor = new Float32Array(pos.length), cl = new Float32Array(pos.length), idx = new Uint32Array(kit.length * BI2.length); let o = 0;
+      kit.forEach(([x0, y0, z0, yaw, sx, sy, sz, c], bi) => { const cs = Math.cos(yaw), sn = Math.sin(yaw), v0 = bi * nv;
+        BI2.forEach((v, k) => idx[bi * BI2.length + k] = v0 + v);
+        keepV.forEach(i => { const x = BP[i * 3] * sx, z = BP[i * 3 + 2] * sz, nx = BN[i * 3], nz = BN[i * 3 + 2];
+          pos[o] = x0 + x * cs + z * sn; pos[o + 1] = BP[i * 3 + 1] * sy + y0; pos[o + 2] = z0 - x * sn + z * cs;
+          nor[o] = nx * cs + nz * sn; nor[o + 1] = BN[i * 3 + 1]; nor[o + 2] = -nx * sn + nz * cs; cl[o] = c.r; cl[o + 1] = c.g; cl[o + 2] = c.b; o += 3; }); });
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.BufferAttribute(nor, 3)); g.setAttribute("color", new THREE.BufferAttribute(cl, 3)); g.setIndex(new THREE.BufferAttribute(idx, 1));
+      const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })); m.frustumCulled = false; scene.add(m); }
+    // parked cars: low-poly versions of the traffic's three body styles (side profiles, no bevels), instanced per style
+    { const PARK_COLS = [0xe9e4da, 0x1d1d22, 0x9aa0a8, 0x2f4f7a, 0x8e1b1b, 0x5c6b73, 0xc9c3b4, 0x34383d];
+      const SH = [
+        { w: 1.82, r: .33, wb: 1.38, body: s => { s.moveTo(2.22, .3); s.quadraticCurveTo(2.33, .34, 2.33, .5); s.quadraticCurveTo(2.32, .7, 2.1, .74); s.lineTo(.85, .83); s.lineTo(-1.6, .88); s.quadraticCurveTo(-2.28, .88, -2.3, .66); s.lineTo(-2.3, .42); s.quadraticCurveTo(-2.28, .3, -2.1, .3);
+            s.lineTo(-1.76, .3); s.absarc(-1.38, .33, .38, Math.PI, 0, true); s.lineTo(1.0, .3); s.absarc(1.38, .33, .38, Math.PI, 0, true); s.lineTo(2.22, .3); }, glass: [[.86, .82], [.15, 1.3], [-.95, 1.33], [-1.62, .87]] },
+        { w: 1.76, r: .31, wb: 1.28, body: s => { s.moveTo(1.98, .3); s.quadraticCurveTo(2.08, .34, 2.08, .5); s.quadraticCurveTo(2.07, .68, 1.85, .72); s.lineTo(.75, .84); s.lineTo(-1.8, .9); s.quadraticCurveTo(-2.04, .9, -2.05, .7); s.lineTo(-2.05, .42); s.quadraticCurveTo(-2.03, .3, -1.88, .3);
+            s.lineTo(-1.64, .3); s.absarc(-1.28, .31, .36, Math.PI, 0, true); s.lineTo(.92, .3); s.absarc(1.28, .31, .36, Math.PI, 0, true); s.lineTo(1.98, .3); }, glass: [[.76, .83], [.05, 1.36], [-1.6, 1.38], [-1.92, .9]] },
+        { w: 1.94, r: .38, wb: 1.45, body: s => { s.moveTo(2.3, .38); s.quadraticCurveTo(2.42, .42, 2.42, .6); s.lineTo(2.4, .86); s.quadraticCurveTo(2.36, .98, 2.15, 1.0); s.lineTo(.95, 1.06); s.lineTo(-1.9, 1.1); s.quadraticCurveTo(-2.36, 1.1, -2.4, .9); s.lineTo(-2.4, .52); s.quadraticCurveTo(-2.38, .38, -2.2, .38);
+            s.lineTo(-1.89, .38); s.absarc(-1.45, .4, .44, Math.PI, 0, true); s.lineTo(1.01, .38); s.absarc(1.45, .4, .44, Math.PI, 0, true); s.lineTo(2.3, .38); }, glass: [[.96, 1.05], [.2, 1.62], [-1.8, 1.66], [-2.2, 1.1]] }];
+      const pm = new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0x555555, shininess: 50, vertexColors: true });
+      pm.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace("#include <color_vertex>", THREE.ShaderChunk.color_vertex.replace("vColor.xyz *= instanceColor.xyz;",
+        "vColor.xyz *= all(lessThan(abs(color.xyz - 1.0), vec3(.002))) ? instanceColor.xyz : vec3(1.0);")); }; // only the paint takes the car's colour
+      const part = (g, col) => { const q = g.index ? g.toNonIndexed() : g; const c = new THREE.Color(col), n = q.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3); q.setAttribute("color", new THREE.BufferAttribute(a, 3)); return q; };
+      SH.forEach((st, k) => { const mine = parked.filter(c => c.k === k); if (!mine.length) return;
+        const side = (g, w) => { g.rotateY(Math.PI / 2); g.translate(-w / 2, 0, 0); return g; }, b = new THREE.Shape(); st.body(b); const gl = new THREE.Shape(); st.glass.forEach(([x, y], i) => i ? gl.lineTo(x, y) : gl.moveTo(x, y));
+        const parts = [part(side(new THREE.ExtrudeGeometry(b, { depth: st.w, bevelEnabled: false, curveSegments: 3 }), st.w), 0xffffff), part(side(new THREE.ExtrudeGeometry(gl, { depth: st.w - .2, bevelEnabled: false }), st.w - .2), 0x161a22)];
+        [[-1, -st.wb], [1, -st.wb], [-1, st.wb], [1, st.wb]].forEach(([sx, z]) => { const t = new THREE.CylinderGeometry(st.r, st.r, .22, 9); t.rotateZ(Math.PI / 2); t.translate(sx * (st.w / 2 - .12), st.r, z); parts.push(part(t, 0x18181b)); });
+        const geo = new THREE.BufferGeometry(); ["position", "normal", "color"].forEach(at => { const arr = []; parts.forEach(g => arr.push(...g.attributes[at].array)); geo.setAttribute(at, new THREE.Float32BufferAttribute(arr, 3)); });
+        const im = new THREE.InstancedMesh(geo, pm, mine.length), d = new THREE.Object3D();
+        mine.forEach((c, i) => { d.position.set(c.q.x, Y, c.q.z); d.rotation.set(0, c.yaw, 0); d.updateMatrix(); im.setMatrixAt(i, d.matrix); im.setColorAt(i, new THREE.Color(PARK_COLS[Math.floor(c.c * PARK_COLS.length)])); });
+        scene.add(im); }); }
+  }
 
   /* ------------------------------ palm trees ------------------------------ */
   const trunkGeo = new THREE.CylinderGeometry(0.16, 0.3, 1, 7, 10); trunkGeo.translate(0, 0.5, 0);
@@ -1034,21 +1290,42 @@ function wrapLines(g, text, maxW) {
 
   /* the hills + the sign */
   { const a = at(.6), c = a.pos.clone().add(a.right.clone().multiplyScalar(330)).add(a.tan.clone().multiplyScalar(140));
-    const hillMat = lambert(0x6d6a43);
-    const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), hillMat);
-    hill.scale.set(230, 110, 190); hill.position.copy(c); scene.add(hill);
-    [[-260, 180, 160, 70, 140], [200, 260, 150, 80, 130], [40, -260, 200, 60, 160], [-400, -120, 170, 90, 150]].forEach(([dx, dz, sx, sy, sz]) => {
-      const h = new THREE.Mesh(hill.geometry, lambert(0x5f5c3c)); h.scale.set(sx, sy, sz); h.position.set(c.x + dx, 0, c.z + dz);
-      if (clearOfRoad(h.position, Math.max(sx, sz))) scene.add(h);
-    });
+    // one chaparral massif instead of smooth half-domes: a heightfield with ridges and gullies, scrub and dry grass in its
+    // vertex colours. The old main hill's shape is kept where the sign stands.
     const toRoad = a.pos.clone().sub(c).setY(0).normalize();
+    const hh = (x, z) => { const q = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return q - Math.floor(q); };
+    const vn = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi, u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+      return lerp(lerp(hh(xi, zi), hh(xi + 1, zi), u), lerp(hh(xi, zi + 1), hh(xi + 1, zi + 1), u), v); };
+    const oct = (x, z, ridge) => { let f = 0, amp = .5, fr = 1; for (let o = 0; o < 5; o++) { const n = vn(x * fr + o * 17.3, z * fr - o * 9.1); f += amp * (ridge ? 1 - Math.abs(n * 2 - 1) : n); amp *= .5; fr *= 2.07; } return f; };
+    const bumps = [[0, 0, 230, 110, 190]].concat([[-260, 180, 160, 70, 140], [200, 260, 150, 80, 130], [40, -260, 200, 60, 160], [-400, -120, 170, 90, 150]].filter(([dx, dz, sx, sy, sz]) => clearOfRoad(new THREE.Vector3(c.x + dx, 0, c.z + dz), Math.max(sx, sz))));
+    const signAt = c.clone().add(toRoad.clone().multiplyScalar(230 * Math.cos(.55) * .98));
+    const hillH = (x, z) => { let h = -3, dome = 0;
+      bumps.forEach(([dx, dz, sx, sy, sz], k) => { const q = ((x - c.x - dx) / sx) ** 2 + ((z - c.z - dz) / sz) ** 2; if (q >= 1) return;
+        const peak = sy * Math.pow(1 - q, .85) * 1.18; if (!k) dome = sy * Math.sqrt(1 - q); h = Math.max(h, peak); });
+      if (h <= 0) return h;
+      const keep = sstep(25, 95, Math.hypot(x - signAt.x, z - signAt.z));
+      if (dome) h = lerp(Math.max(h, dome), h, keep);
+      return h + keep * sstep(0, 35, h) * ((oct(x / 120, z / 120, true) - .55) * 46 + (oct(x / 30, z / 30, false) - .5) * 7);
+    };
+    { const X0 = c.x - 600, Z0 = c.z - 450, W = 980, D = 880, NXg = 196, NZg = 176, pos = [], col = [], idx = [], H = [];
+      const C1 = new THREE.Color(0x4b5232), C2 = new THREE.Color(0x77784f), C3 = new THREE.Color(0xa39264), C4 = new THREE.Color(0x3a3d29), tc = new THREE.Color();
+      for (let j = 0; j <= NZg; j++) for (let i = 0; i <= NXg; i++) H.push(hillH(X0 + i * W / NXg, Z0 + j * D / NZg));
+      for (let j = 0; j <= NZg; j++) for (let i = 0; i <= NXg; i++) { const k = j * (NXg + 1) + i, x = X0 + i * W / NXg, z = Z0 + j * D / NZg, h = H[k];
+        const gx = (H[j * (NXg + 1) + Math.min(NXg, i + 1)] - H[j * (NXg + 1) + Math.max(0, i - 1)]) / (2 * W / NXg), gz = (H[Math.min(NZg, j + 1) * (NXg + 1) + i] - H[Math.max(0, j - 1) * (NXg + 1) + i]) / (2 * D / NZg);
+        const slope = Math.min(1, Math.hypot(gx, gz)), scrub = oct(x / 14, z / 14, false), dry = sstep(.42, .62, oct(x / 70 + 3, z / 70, false));
+        tc.copy(C2).lerp(C1, sstep(.45, .62, scrub)).lerp(C3, dry * (1 - slope * .6) * .8).lerp(C4, sstep(.55, 1, slope) * .55);
+        pos.push(x, Math.max(h, -3), z); col.push(tc.r, tc.g, tc.b); }
+      for (let j = 0; j < NZg; j++) for (let i = 0; i < NXg; i++) { const k = j * (NXg + 1) + i, q = [k, k + NXg + 1, k + 1, k + NXg + 2];
+        if (q.every(v => H[v] <= 0)) continue; idx.push(q[0], q[1], q[2], q[2], q[1], q[3]); }
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
+      scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true }))); }
     const tex = canvasTex(1400, 300, (g, w, h) => {
       g.fillStyle = "#f4f2ea"; g.font = "260px Anton"; g.textBaseline = "top";
       const word = CV.name.toUpperCase(); let x = 40; const gap = (w - 80 - g.measureText(word).width) / (word.length - 1);
       [...word].forEach(ch => { g.fillText(ch, x, 10); x += g.measureText(ch).width + gap; });
     });
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(130, 28), basic(tex, { transparent: true, fog: true }));
-    const el = .55, sp = c.clone().add(toRoad.clone().multiplyScalar(230 * Math.cos(el) * 0.98)).setY(110 * Math.sin(el) + 8);
+    const el = .55, sp = c.clone().add(toRoad.clone().multiplyScalar(230 * Math.cos(el) * 0.98)).setY(110 * Math.sin(el) + 8); sp.y = hillH(sp.x, sp.z) + 8;
     sign.position.copy(sp); facing(sign, toRoad); sign.rotateX(-0.35); scene.add(sign); }
 
   /* collectibles = certs */
@@ -1528,20 +1805,41 @@ function wrapLines(g, text, maxW) {
     // nose: wide gloss grille with mesh, slim LED headlamps with the four-dot signature, RANGE ROVER across the bonnet
     const grille = canvasTex(256, 64, (g, w, h) => { g.fillStyle = "#050506"; g.fillRect(0, 0, w, h); g.strokeStyle = "#3a3a42"; g.lineWidth = 2;
       for (let y = 0; y < h; y += 8) for (let x = (y / 8) % 2 ? 6 : 0; x < w; x += 12) { g.beginPath(); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g.lineTo(x + Math.cos(a) * 4.5, y + Math.sin(a) * 4.5); } g.closePath(); g.stroke(); } });
-    add(new THREE.Mesh(new THREE.PlaneGeometry(1.25, .3), new THREE.MeshPhongMaterial({ map: grille, specular: 0x444444, shininess: 60 })), 0, .82, -2.48).rotation.y = Math.PI;
-    const letters = canvasTex(512, 48, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = "#e3e5ea"; g.font = "700 30px 'Barlow Condensed'"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("R  A  N  G  E     R  O  V  E  R", w / 2, h / 2 + 2); });
-    const lt = add(new THREE.Mesh(new THREE.PlaneGeometry(1.2, .1), new THREE.MeshBasicMaterial({ map: letters, transparent: true })), 0, 1.07, -2.36); lt.rotation.set(-1.2, Math.PI, 0);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(1.25, .3), new THREE.MeshPhongMaterial({ map: grille, specular: 0x444444, shininess: 60 })), 0, .82, -2.562).rotation.y = Math.PI;
+    // RANGE ROVER in widely spaced chrome capitals across the bonnet's leading edge and the tailgate, and the green and
+    // silver oval on the grille: all drawn here, no logo images
+    const chromeWord = canvasTex(2048, 128, (g, w, h) => { g.clearRect(0, 0, w, h);
+      const word = "RANGE ROVER", fs = 92; g.font = `800 ${fs}px Overpass, "Barlow Condensed", sans-serif`; g.textBaseline = "middle";
+      const sx = 1.32, cw = [...word].map(ch => ch === " " ? fs * .9 : g.measureText(ch).width * sx), gap = (w - 60 - cw.reduce((p, q) => p + q, 0)) / (word.length - 1);
+      const gr = g.createLinearGradient(0, h / 2 - fs * .42, 0, h / 2 + fs * .42);
+      [[0, "#ffffff"], [.3, "#c9ced6"], [.48, "#8c939d"], [.52, "#5f6670"], [.7, "#d7dbe1"], [1, "#9aa0a8"]].forEach(([o, c]) => gr.addColorStop(o, c));
+      let x = 30; [...word].forEach((ch, i) => { if (ch !== " ") { g.save(); g.translate(x, h / 2 + 4); g.scale(sx, 1);
+          g.lineWidth = 5; g.strokeStyle = "rgba(10,10,12,.85)"; g.strokeText(ch, 0, 0); g.fillStyle = gr; g.translate(0, -4); g.fillText(ch, 0, 0); g.restore(); }
+        x += cw[i] + gap; }); });
+    const wordM = new THREE.MeshPhongMaterial({ map: chromeWord, transparent: true, alphaTest: .25, specular: 0xffffff, shininess: 90, emissive: 0x2a2a2e, depthWrite: false });
+    // bonnet: flat on the top, just behind the leading edge, reading from the front
+    const lt = add(new THREE.Mesh(new THREE.PlaneGeometry(1.36, .085), wordM), 0, 1.174, -2.14); lt.rotation.set(-Math.PI / 2 - .06, 0, Math.PI);
+    // tailgate: on the rear face between the light bar and the bumper
+    const tg = add(new THREE.Mesh(new THREE.PlaneGeometry(1.3, .082), wordM), 0, .87, 2.527); tg.rotation.set(-.075, 0, 0);
+    const oval = canvasTex(256, 128, (g, w, h) => { g.clearRect(0, 0, w, h);
+      const el = (rx, ry, fill) => { g.beginPath(); g.ellipse(w / 2, h / 2, rx, ry, 0, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+      const rim = g.createLinearGradient(0, 0, 0, h); rim.addColorStop(0, "#f4f6f8"); rim.addColorStop(.5, "#8d949e"); rim.addColorStop(1, "#e3e6ea"); el(126, 62, rim);
+      const grn = g.createRadialGradient(w / 2, h * .35, 8, w / 2, h / 2, 130); grn.addColorStop(0, "#1f7a4a"); grn.addColorStop(1, "#0a3d22"); el(114, 52, grn);
+      g.lineWidth = 2.5; g.strokeStyle = "#cfd4da"; g.beginPath(); g.ellipse(w / 2, h / 2, 106, 45, 0, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = "#eef1f4"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = `800 34px Overpass, sans-serif`;
+      const t = "LAND ROVER"; let x = w / 2 - (t.length - 1) * 9.5; [...t].forEach(ch => { g.fillText(ch, x, h / 2 + 2); x += 19; }); });
+    const ov = add(new THREE.Mesh(new THREE.PlaneGeometry(.22, .11), new THREE.MeshPhongMaterial({ map: oval, transparent: true, alphaTest: .3, specular: 0xffffff, shininess: 80 })), 0, .84, -2.575); ov.rotation.y = Math.PI;
     [-1, 1].forEach(s => {
-      bx(.5, .05, .03, lightW, s * .66, .96, -2.47);
-      for (let k = 0; k < 4; k++) bx(.035, .035, .03, lightW, s * (.5 + k * .08), .9, -2.47);
-      bx(.56, .16, .04, gloss, s * .62, .55, -2.48);                            // lower intakes
-      bx(.06, .2, .04, amber, s * .95, .58, -2.47);
-      bx(.48, .045, .04, lightR, s * .68, 1.02, 2.43);                          // tail lamps
-      [-.06, .06].forEach(dx => { const ex = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .1, 16), satin); ex.rotation.x = Math.PI / 2; add(ex, s * (.5 + dx), .36, 2.42); });  // quad pipes
+      bx(.5, .05, .03, lightW, s * .66, .96, -2.55);
+      for (let k = 0; k < 4; k++) bx(.035, .035, .03, lightW, s * (.5 + k * .08), .9, -2.556);
+      bx(.56, .16, .04, gloss, s * .62, .55, -2.562);                            // lower intakes
+      bx(.06, .2, .04, amber, s * .95, .58, -2.555);
+      bx(.48, .045, .04, lightR, s * .68, 1.02, 2.515);                          // tail lamps
+      [-.06, .06].forEach(dx => { const ex = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .1, 16), satin); ex.rotation.x = Math.PI / 2; add(ex, s * (.5 + dx), .36, 2.5); });  // quad pipes
     });
-    bx(.9, .025, .04, lightR, 0, 1.02, 2.43);
+    bx(.9, .025, .04, lightR, 0, 1.02, 2.515);
     const svrBadge = canvasTex(128, 48, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = "#e9e9ee"; g.font = "800 34px Overpass"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("SVR", w / 2, h / 2 + 2); });
-    add(new THREE.Mesh(new THREE.PlaneGeometry(.18, .068), new THREE.MeshBasicMaterial({ map: svrBadge, transparent: true })), .5, .8, 2.455);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(.18, .068), new THREE.MeshBasicMaterial({ map: svrBadge, transparent: true })), .5, .74, 2.54);
     [-1, 1].forEach(s => { const b2 = add(new THREE.Mesh(new THREE.PlaneGeometry(.14, .052), new THREE.MeshBasicMaterial({ map: svrBadge, transparent: true })), s * 1.012, .78, -1.62); b2.rotation.y = s * Math.PI / 2; });
     // 22-inch split-spoke wheels, red calipers
     const tyreG = new THREE.CylinderGeometry(.42, .42, .3, 36); tyreG.rotateZ(Math.PI / 2);
@@ -1582,7 +1880,7 @@ function wrapLines(g, text, maxW) {
     mergeStatic(svr, new Set(svr.userData.wheels));
   }
 
-  const MU_LINES = [[.3, 2.0, "friend", "Is that... a Range Rover Sport SVR?"], [3.5, 4.8, "friend", "Did he just wink at you?"], [5.0, 6.4, "Quinn", "One day. ONE DAY."], [6.4, 8.2, "friend", "Easy. The MG didn't do anything."]];
+  const MU_LINES = [[.2, 3.1, "friend", "Is that... a Range Rover Sport SVR?"], [3.4, 4.8, "friend", "Did he just wink at you?"], [4.9, 7.2, "Quinn", "One day. ONE DAY."], [7.3, 9.0, "friend", "Easy. The MG didn't do anything."]];
   const mu = { on: false, done: false, t0: 0 };
 
   /* ------------------------------ our car ------------------------------ */
@@ -1642,6 +1940,17 @@ function wrapLines(g, text, maxW) {
   MI.seam = cabin(std(0x0b0b0d, .7));
   MI.tint = withEnv(new THREE.MeshStandardMaterial({ color: 0x2a3640, transparent: true, opacity: .2, roughness: .05, metalness: .5, depthWrite: false, side: THREE.DoubleSide }));
   MI.tint.userData.envI = .9; MI.tint.envMapIntensity = .9;
+  // mirror glass: a soft sky / horizon / road gradient (side mirrors) and the rear window over the back seats (interior mirror),
+  // partly self-lit so they read as reflections rather than black holes (the map also keeps them out of mergeStatic, which drops uvs)
+  { const mg = (w, h, stops) => canvasTex(w, h, (g) => { const gr = g.createLinearGradient(0, 0, 0, h); stops.forEach(([o, c]) => gr.addColorStop(o, c)); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+    const side = mg(64, 128, [[0, "#c8d4e0"], [.45, "#e2d6cf"], [.52, "#9aa0a6"], [.56, "#5b5f66"], [1, "#43464c"]]);
+    const rear = canvasTex(256, 64, (g) => { const gr = g.createLinearGradient(0, 0, 0, 64); [[0, "#2e2e33"], [.14, "#3c3c42"], [.2, "#a9b4c0"], [.5, "#e0c8b8"], [.62, "#8a8486"], [.68, "#2e2e32"], [1, "#222226"]].forEach(([o, c]) => gr.addColorStop(o, c));
+      g.fillStyle = gr; g.fillRect(0, 0, 256, 64); g.fillStyle = "#18181b"; [[18, 30], [96, 160], [238, 30]].forEach(([x, w]) => { g.beginPath(); g.ellipse(x, 44, w / 2, 9, 0, 0, Math.PI * 2); g.fill(); }); });
+    const glassMat = (map, k) => { const m = withEnv(new THREE.MeshStandardMaterial({ color: 0x4a4e54, roughness: .08, metalness: .7, map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: k })); m.userData.envI = .6; m.envMapIntensity = .6; return m; };
+    MI.mirror = glassMat(side, .5); MI.rearGlass = glassMat(rear, .6); }
+  MI.mirHous = withEnv(new THREE.MeshStandardMaterial({ color: 0x2c2d32, roughness: .38, metalness: .15 })); MI.mirHous.userData.envI = .5; MI.mirHous.envMapIntensity = .5;
+  MI.cowl = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .75, metalness: 0, map: canvasTex(512, 32, (g) => { g.fillStyle = "#151518"; g.fillRect(0, 0, 512, 32);
+    g.fillStyle = "#050506"; for (let x = 6; x < 506; x += 9) g.fillRect(x, 7, 5, 18); g.fillStyle = "#222226"; g.fillRect(0, 0, 512, 3); }) });
   // smooth shading for the bevelled upholstery: average face normals across shared positions, keeping creases sharper than ~57 degrees
   const smoothN = (g, cosT = .55) => { g = g.index ? g.toNonIndexed() : g; const p = g.attributes.position, n = p.count, fn = [], keys = [], map = new Map(), a = V(0, 0, 0), b = V(0, 0, 0), c = V(0, 0, 0);
     for (let i = 0; i < n; i += 3) { a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2); const f = b.sub(a).cross(c.sub(a)); fn.push(f.clone()); }
@@ -1679,8 +1988,8 @@ function wrapLines(g, text, maxW) {
     put(soft(.62, .004, .006, .002, .002, MI.hard), .5, .655, -.49);
     // centre stack: touchscreen in a gloss bezel at the top, two round vents, the climate panel, then down into the console
     runX([[-.78, .44], [-.565, .44], [-.565, .62], [-.585, .80], [-.615, .925, -.598, .905], [-.70, .955, -.64, .955], [-.78, .955]], -.125, .165, MI.soft, .012);
-    put(soft(.262, .17, .022, .02, .008, MI.gloss), .02, .868, -.598, -.24);
-    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.224, .14), new THREE.MeshBasicMaterial()); scr.position.set(.02, .87, -.585); scr.rotation.x = -.24; rig.add(scr); car.userData.screen = scr;
+    put(soft(.262, .17, .022, .02, .008, MI.gloss), .02, .868, -.582, -.24);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.224, .14), new THREE.MeshBasicMaterial()); scr.position.set(.02, .87, -.5695); scr.rotation.x = -.24; rig.add(scr); car.userData.screen = scr;
     put(soft(.25, .075, .018, .02, .007, MI.gloss), .02, .655, -.57, -.08);
     [-.06, .02, .1].forEach(x => { const k = put(new THREE.Mesh(new THREE.CylinderGeometry(.017, .019, .02, 24), MI.silver), x, .655, -.555, Math.PI / 2 - .08); });
     // round vents: a satin ring, a dark throat, three vanes and a centre knob
@@ -1725,6 +2034,7 @@ function wrapLines(g, text, maxW) {
         put(soft(.022, .03, .13, .01, .008, MI.silver), s * .84, .87, pz);
         put(soft(.06, .42, z1 - z0, .03, .02, MI.hard), s * .9, .38, c); });
       put(soft(.075, .84, .12, .03, .02, MI.hard), s * .885, .58, .76); // B-pillar trim over the shut line
+      put(soft(.05, .4, .36, .02, .01, MI.hard), s * .885, .38, -.93); // kick panel ahead of the front door card
       put(soft(.06, .83, .72, .03, .02, MI.hard), s * .9, .58, 2.08);  // rear quarter panel beside the bench
       { const sp = put(new THREE.Mesh(new THREE.CircleGeometry(.06, 24), MI.vent), s * .866, .4, 1.27, 0, -s * Math.PI / 2);
         put(new THREE.Mesh(new THREE.TorusGeometry(.063, .004, 6, 28), MI.silver), s * .865, .4, 1.27, 0, -s * Math.PI / 2); }
@@ -1735,12 +2045,28 @@ function wrapLines(g, text, maxW) {
       rig.add(tube([V(s * .885, .93, -1.14), V(s * .845, 1.18, -.8), V(s * .79, 1.43, -.44), V(s * .768, 1.5, -.26)], .022, M.paint));
       sweep([V(s * .758, 1.49, -.26), V(s * .76, 1.5, .45), V(s * .762, 1.48, 1.3), V(s * .745, 1.46, 1.8), V(s * .65, 1.412, 2.15)], .04, .02, MI.fabric, V(s, 1, 0), 32);
       sweep([V(s * .85, .97, .74), V(s * .8, 1.24, .7), V(s * .755, 1.47, .66)], .055, .03, MI.fabric, V(s, 0, 0));
-      // side mirror: a rounded housing on a short stalk
-      const sm = new THREE.Group(); sm.position.set(s * 1.03, 1.03, -.68);
-      const housing = new THREE.Mesh(new THREE.SphereGeometry(.5, 24, 16), M.paint); housing.scale.set(.25, .15, .1); housing.position.x = s * .05; sm.add(housing);
-      const glassM = new THREE.Mesh(new THREE.CircleGeometry(.5, 28), M.chrome); glassM.scale.set(.21, .115, 1); glassM.position.set(s * .05, 0, .046); sm.add(glassM);
-      sm.add(limb(V(-s * .09, -.03, 0), V(s * .0, -.01, 0), .022, .016, M.paint));
-      rig.add(sm);
+      // side mirror: a body-coloured housing (flat face toward Quinn, domed nose into the wind) on a black plastic base
+      // bolted to the door at the window's front corner; the glass shows a soft sky-and-road reflection
+      { const sm = new THREE.Group(); sm.position.set(s * .9, .995, -.84); sm.rotation.y = -s * .06; rig.add(sm);
+        // outline in (outward u, up v): short at the door end, taller and rounded at the outer end
+        const outline = (k = 0) => { const P = [[.075, -.04], [.2, -.056], [.3, -.03], [.302, .035], [.215, .066], [.075, .044]].map(([u, v]) => [(u + k * Math.sign(.19 - u)) * s, v + k * Math.sign(.005 - v)]);
+          const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], n = P.length, sh = new THREE.Shape(), m0 = mid(P[0], P[1]); sh.moveTo(m0[0], m0[1]);
+          for (let i = 1; i <= n; i++) { const c = P[i % n], e = mid(c, P[(i + 1) % n]); sh.quadraticCurveTo(c[0], c[1], e[0], e[1]); } return sh; };
+        const hg = new THREE.ExtrudeGeometry(outline(), { depth: .05, bevelEnabled: true, bevelThickness: .025, bevelSize: .012, bevelSegments: 4, curveSegments: 6 });
+        hg.translate(0, 0, -.075); const hp = hg.attributes.position;
+        for (let i = 0; i < hp.count; i++) { const z = hp.getZ(i), w = clamp(-z / .1, 0, 1), u = Math.abs(hp.getX(i)), v = hp.getY(i);
+          hp.setZ(i, z - .05 * w * Math.max(0, 1 - ((u - .2) / .14) ** 2) * (1 - .4 * Math.min(1, (v / .07) ** 2))); }
+        sm.add(new THREE.Mesh(smoothN(hg), M.paint));
+        const flat = (k, mat, z) => { const g = new THREE.ShapeGeometry(outline(k), 6), p = g.attributes.position, uv = g.attributes.uv;
+          for (let i = 0; i < p.count; i++) uv.setXY(i, (Math.abs(p.getX(i)) - .07) / .24, (p.getY(i) + .06) / .13);
+          const m = new THREE.Mesh(g, mat); m.position.z = z; sm.add(m); return m; };
+        flat(.004, M.dash, .0008);
+        flat(.011, MI.mirror, .0016);
+        // black base: a triangular sail plate on the door skin and a short arm out to the housing
+        const sail = new THREE.Shape(); sail.moveTo(0, -.03); sail.lineTo(.13, -.03); sail.lineTo(0, .07); sail.lineTo(0, -.03);
+        const sg = new THREE.ExtrudeGeometry(sail, { depth: .02, bevelEnabled: true, bevelThickness: .006, bevelSize: .006, bevelSegments: 2 });
+        sg.translate(0, 0, -.01); const sp = new THREE.Mesh(sg, M.dash); sp.rotation.y = Math.PI / 2; sp.position.set(s * .004, -.03, -.004); sm.add(sp);
+        sm.add(soft(.095, .032, .055, .012, .008, M.dash, V(s * .05, -.03, -.045))); }
       // sun visor folded up against the headliner
       put(soft(.36, .016, .16, .03, .007, MI.fabric), s * .4 + (s > 0 ? .02 : 0), 1.468, -.2, -.06);
     });
@@ -1754,19 +2080,47 @@ function wrapLines(g, text, maxW) {
     // windshield
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.62, .94), M.glass); ws.position.set(0, 1.21, -.71); ws.rotation.x = .97; rig.add(ws);
     // rear-view mirror on its stalk from the top of the glass, and the air freshener hanging under it
-    rig.add(limb(V(.02, 1.43, -.43), V(.02, 1.385, -.49), .009, .008, MI.hard));
-    const mir = new THREE.Group(); mir.position.set(.02, 1.362, -.5); mir.rotation.set(.06, -.32, 0); rig.add(mir);
-    mir.add(soft(.22, .062, .03, .026, .011, MI.hard, V(0, 0, 0)), soft(.208, .051, .006, .022, .002, MI.gloss, V(0, 0, .014)));
-    const fresh = new THREE.Group(); fresh.position.set(.07, 1.335, -.5); rig.add(fresh); car.userData.fresh = fresh;
+    { const pad = soft(.06, .045, .012, .012, .004, MI.mirHous, V(.01, 1.445, -.365)); pad.rotation.x = .97; rig.add(pad);
+      rig.add(limb(V(.01, 1.44, -.372), V(.01, 1.396, -.405), .009, .007, MI.mirHous));
+      rig.add(new THREE.Mesh(new THREE.SphereGeometry(.011, 12, 8), MI.mirHous).translateX(.01).translateY(1.392).translateZ(-.408)); }
+    const mir = new THREE.Group(); mir.position.set(.01, 1.37, -.415); mir.rotation.set(.07, -.33, 0); rig.add(mir);
+    { const mg = new THREE.ExtrudeGeometry(softShape(.2, .056, .025), { depth: .004, bevelEnabled: true, bevelThickness: .012, bevelSize: .005, bevelSegments: 4, curveSegments: 10 });
+      mg.translate(0, 0, -.016); const mp = mg.attributes.position;
+      for (let i = 0; i < mp.count; i++) { const z = mp.getZ(i); if (z < -.004) mp.setZ(i, z - .012 * Math.max(0, 1 - (mp.getX(i) / .105) ** 2)); }
+      mir.add(new THREE.Mesh(smoothN(mg), MI.mirHous));
+      const fg = new THREE.ShapeGeometry(softShape(.195, .051, .023), 8), fp = fg.attributes.position, fu = fg.attributes.uv;
+      for (let i = 0; i < fp.count; i++) fu.setXY(i, fp.getX(i) / .195 + .5, fp.getY(i) / .051 + .5);
+      const face = new THREE.Mesh(fg, MI.rearGlass); face.position.z = .0005; mir.add(face); }
+    const fresh = new THREE.Group(); fresh.position.set(.06, 1.342, -.42); rig.add(fresh); car.userData.fresh = fresh;
     fresh.add(beam(V(0, 0, 0), V(0, -.09, 0), .002, M.stitch));
     const ftex = canvasTex(128, 192, (g) => { g.fillStyle = "#3d8b3d"; g.beginPath(); for (let k = 0; k < 7; k++) { const a = -Math.PI / 2 + (k - 3) * .45; g.ellipse(64 + Math.cos(a) * 30, 60 + Math.sin(a) * 30 + 10, 34, 10, a, 0, Math.PI * 2); } g.fill(); g.fillStyle = "#7a5a3a"; g.fillRect(58, 70, 12, 110); g.fillStyle = "#ffd23f"; g.font = "700 26px 'Barlow Condensed'"; g.textAlign = "center"; g.fillText("LA", 64, 140); });
     const fm = new THREE.Mesh(new THREE.PlaneGeometry(.065, .1), new THREE.MeshBasicMaterial({ map: ftex, transparent: true, side: THREE.DoubleSide })); fm.position.y = -.14; fresh.add(fm);
-    // hood
-    const hg = new THREE.PlaneGeometry(1.95, 1.5, 28, 24); hg.rotateX(-Math.PI / 2);
-    const pa = hg.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) / .975, zz = (-pa.getZ(i) + .75) / 1.5;
-      pa.setY(i, .985 - .07 * Math.pow(Math.abs(x), 3) - .25 * Math.pow(Math.abs(x), 10) - .14 * zz * zz - .04 * Math.pow(zz, 6) + .012 * Math.cos(x * 9) * (1 - zz) * Math.exp(-((x / .5) ** 2))); }
-    hg.computeVertexNormals(); const hood = new THREE.Mesh(hg, M.paint); hood.position.set(0, 0, -1.85); rig.add(hood);
-    [-.38, .22].forEach(x => { const w = rbox(.6, .012, .02, M.dash, V(x, .98, -1.18)); w.rotation.y = .12; rig.add(w); });
+    // hood and wings: one painted skin 2 m across. The bonnet's rear edge sits just ahead of the windscreen; outboard of the
+    // shut lines the wings carry on back to the A-pillar feet, then roll down over the sides, so no road shows past the dash
+    const HZ = -1.22, hoodY = (x, z) => { const X = Math.abs(x), zz = clamp((HZ - z) / 1.4, 0, 1);
+      return .975 - .05 * (X / .9) ** 2 - 1.6 * Math.max(0, X - .87) ** 2 - 12 * Math.max(0, X - .93) ** 2 - .13 * zz * zz - .04 * zz ** 6 + .012 * Math.cos(x * 9) * (1 - zz) * Math.exp(-((x / .5) ** 2)); };
+    const hg = new THREE.PlaneGeometry(2, 1, 50, 26); hg.rotateX(-Math.PI / 2);
+    const pa = hg.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i), t = .5 - pa.getZ(i), r = 2 / 26;
+      let z = t <= r + 1e-6 ? -1.1 - .12 * t / r : HZ - 1.4 * (t - r) / (1 - r);
+      if (z > HZ) z = HZ + (z - HZ) * sstep(.74, .84, Math.abs(x)); // the wings reach back, the bonnet stops at its rear edge
+      pa.setXYZ(i, x, hoodY(x, z), z); }
+    hg.computeVertexNormals(); const hood = new THREE.Mesh(hg, M.paint); rig.add(hood);
+    // shut lines between bonnet and wings
+    [-1, 1].forEach(s => { const pts = []; for (let k = 0; k <= 10; k++) { const z = HZ - k * .13; pts.push(V(s * .79, hoodY(s * .79, z) + .0008, z)); } rig.add(tube(pts, .0028, MI.seam, 20)); });
+    { const pts = []; for (let k = 0; k <= 12; k++) { const x = -.79 + k * 1.58 / 12; pts.push(V(x, hoodY(x, HZ) - .001, HZ + .002)); } rig.add(tube(pts, .004, MI.seam, 24)); }
+    // the bonnet's turned-down rear lip, so nothing shows through under its edge
+    { const fg = new THREE.PlaneGeometry(1.68, 1, 24, 1), fp = fg.attributes.position;
+      for (let i = 0; i < fp.count; i++) { const x = fp.getX(i); fp.setXYZ(i, x, fp.getY(i) > 0 ? hoodY(x, HZ) - .001 : .935, HZ + .003); }
+      fg.computeVertexNormals(); rig.add(new THREE.Mesh(fg, M.dash)); }
+    // cowl / scuttle: a black grille strip from the windscreen base forward under the bonnet's rear edge
+    { const cg = new THREE.PlaneGeometry(1.62, .14, 8, 1); cg.rotateX(-Math.PI / 2); const cp = cg.attributes.position;
+      for (let i = 0; i < cp.count; i++) { const f = .5 - cp.getZ(i) / .14; cp.setXYZ(i, cp.getX(i), .943 + .009 * f - .012 * (cp.getX(i) / .81) ** 2, -1.095 - .135 * f); }
+      cg.computeVertexNormals(); rig.add(new THREE.Mesh(cg, MI.cowl)); }
+    // wipers parked along the cowl: blade, arm over it, and a pivot cap at the outer end
+    [[-.66, -.08, .05], [-.04, .5, .03]].forEach(([x0, x1, ry]) => { const cx = (x0 + x1) / 2, L = x1 - x0;
+      const bl = rbox(L, .012, .014, M.dash, V(cx, .957, -1.192)); bl.rotation.y = ry; rig.add(bl);
+      const ar = rbox(L * .82, .008, .009, M.dash, V(cx + L * .09, .968, -1.18)); ar.rotation.y = ry; rig.add(ar);
+      rig.add(new THREE.Mesh(new THREE.CylinderGeometry(.016, .018, .014, 14), M.dash).translateX(x1 + .01).translateY(.958).translateZ(-1.18)); });
     // passenger seat
     const seat = new THREE.Group(); seat.position.set(.45, 0, .14); rig.add(seat);
     // each seat is two solid bolstered pieces (cushion and back, one extrusion each, smooth-shaded) with a perforated
@@ -1929,6 +2283,22 @@ function wrapLines(g, text, maxW) {
     // bones are posed just before the arms draw (after tick() has turned the wheel); each mesh has its own skeleton copy
     let armsFrame = -1;
     meshes.forEach(m => { m.onBeforeRender = (rd) => { if (rd.info.render.frame !== armsFrame) { armsFrame = rd.info.render.frame; grip(0); grip(1); } m.skeleton.update(); }; });
+    { const sl = meshes.find(m => /Sleeve/.test(m.material.name));
+      if (sl) { const jm = sl.material.clone(); jm.skinning = false; jm.needsUpdate = true;
+        const fab = (g, u0, v0, su, sv, f) => { const p = g.attributes.position, uv = new Float32Array(p.count * 2); // uvs inside the plain jacket area of the sleeve texture
+          for (let i = 0; i < p.count; i++) { const [u, v] = f(p.getX(i), p.getY(i), p.getZ(i)); uv[i * 2] = u0 + u * su; uv[i * 2 + 1] = v0 + v * sv; } g.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); return g; };
+        // sleeve stubs: posed with the arm bone, so they follow the IK; drawn after the bones are solved for this frame
+        S.forEach(s => { const k = s.fore.position.length() / s.a, dir = s.fore.position.clone().normalize(), q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir), L = .21;
+          const cg = new THREE.CylinderGeometry(.05 * k, .056 * k, L * k, 18, 3, true); cg.translate(0, L * k / 2, 0); cg.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));
+          const sg = new THREE.SphereGeometry(.056 * k, 18, 10);
+          [fab(cg, .06, .38, .3, .25, (x, y, z) => [Math.atan2(x, z) / 6.3 + .5, (x * dir.x + y * dir.y + z * dir.z) / k * 3]), fab(sg, .06, .38, .3, .25, (x, y, z) => [Math.atan2(x, z) / 6.3 + .5, y / k * 4 + .5])].forEach(g => {
+            const m = new THREE.Mesh(g, jm); m.frustumCulled = false; m.onBeforeRender = (rd) => meshes[0].onBeforeRender(rd); s.arm.add(m); }); });
+        // chest and shoulders, kept low so looking down shows a little jacket rather than a wall of it
+        const sh = new THREE.Shape(); sh.moveTo(-.16, .52); sh.lineTo(.16, .52); sh.lineTo(.19, .86); sh.quadraticCurveTo(.215, .975, .15, 1.0); sh.lineTo(.07, 1.005);
+        sh.quadraticCurveTo(0, 1.01, -.07, 1.005); sh.lineTo(-.15, 1.0); sh.quadraticCurveTo(-.215, .975, -.19, .86); sh.lineTo(-.16, .52);
+        const tg = new THREE.ExtrudeGeometry(sh, { depth: .09, bevelEnabled: true, bevelThickness: .05, bevelSize: .025, bevelSegments: 5, curveSegments: 8 });
+        tg.translate(-.4, 0, -.035); const g = fab(smoothN(tg), .06, .36, .5, .3, (x, y, z) => [x + .65 + z * .5, y]);
+        rig.add(new THREE.Mesh(g, jm)); } }
   } else {
     // fallback if the arms model can't load: simple skin-toned hands on the rim
     const skinM = new THREE.MeshStandardMaterial({ color: 0xe6c3b0, roughness: .6 });
@@ -1937,7 +2307,7 @@ function wrapLines(g, text, maxW) {
       const thumb = new THREE.Mesh(new THREE.SphereGeometry(.018, 10, 8), skinM); thumb.scale.set(1, 2, 1); thumb.position.set(-s * .03, .035, .025); thumb.rotation.z = s * .7; hand.add(thumb);
       hand.add(limb(V(s * .02, -.02, .03), V(s * .14, -.22, .38), .032, .04, MI.fabric)); });
   }
-  // Dani: Microsoft Rocketbox avatar "Female_Adult_17" (MIT licence, github.com/microsoft/Microsoft-Rocketbox), seated, hands in her lap, shades on
+  // Dani: Microsoft Rocketbox avatar "Female_Adult_17" (MIT licence, github.com/microsoft/Microsoft-Rocketbox), seated, hands resting on her thighs, shades on
   const pal = new THREE.Group(); pal.position.set(.45, 0, .02); rig.add(pal);
   const dani = { turn: () => { }, t: { value: 0 }, wind: { value: 0 }, talk: false };
   if (GLB[0]) {
@@ -1993,24 +2363,26 @@ function wrapLines(g, text, maxW) {
     rotW(B.Spine1, AX.x, -4); rotW(B.Spine2, AX.x, -3); rotW(B.Neck, AX.x, 5);
     for (const s of [1, -1]) { const sd = s > 0 ? "Left" : "Right";
       aim(B[sd + "UpLeg"], B[sd + "Leg"], V(s * .1, .07, 1)); aim(B[sd + "Leg"], B[sd + "Foot"], V(s * .03, -1, .42)); aim(B[sd + "Foot"], B[sd + "ToeBase"], V(s * .1, -.3, 1)); }
-    // arms: two-bone IK puts each hand on top of her thigh, elbows back by her sides
-    for (const s of [1, -1]) { const sd = s > 0 ? "Left" : "Right", up = B[sd + "Arm"], fo = B[sd + "ForeArm"], ha = B[sd + "Hand"];
+    // arms: two-bone IK rests each hand ON her thigh (the thigh tops sit at y ~1.01 here; the wrist bone rides a palm's
+    // thickness above that), elbows back by her sides; her left hand mid-thigh, her right a little further towards the knee
+    const REST = { 1: { T: V(.105, 1.05, .17), fd: V(-.12, 0, 1), curl: [0, 1, 0], roll: -.01 }, [-1]: { T: V(-.115, 1.048, .23), fd: V(.08, 0, 1), curl: [0, 1, 0], roll: .02 } };
+    for (const s of [1, -1]) { const sd = s > 0 ? "Left" : "Right", up = B[sd + "Arm"], fo = B[sd + "ForeArm"], ha = B[sd + "Hand"], R = REST[s];
       const S = wp(up), l1 = wp(fo).distanceTo(S), l2 = wp(ha).distanceTo(wp(fo));
-      const T = V(s * .118, 1.02, .18), d = Math.min(T.distanceTo(S), (l1 + l2) * .995), dir = T.clone().sub(S).normalize();
+      const T = R.T, d = Math.min(T.distanceTo(S), (l1 + l2) * .995), dir = T.clone().sub(S).normalize();
       const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
       const pole = V(s * .55, -.1, -1).normalize(); pole.sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize();
       const E = S.clone().add(dir.clone().multiplyScalar(a)).add(pole.multiplyScalar(h));
       aim(up, fo, E.clone().sub(S)); aim(fo, ha, T.clone().sub(wp(fo)));
-      // hand: fingers forward along the thigh, palm down on it
-      aim(ha, B[sd + "HandMiddle1"], V(-s * .1, -.3, 1));
+      // hand: fingers forward along the thigh (level with it, not dipping into it), palm down on it
+      aim(ha, B[sd + "HandMiddle1"], R.fd);
       const hd = wp(B[sd + "HandMiddle1"]).sub(wp(ha)).normalize(), across = wp(B[sd + "HandIndex1"]).sub(wp(B[sd + "HandPinky1"]));
-      const palm = hd.clone().cross(across).multiplyScalar(s).normalize(), want = V(-s * .15, -1, 0);
+      const palm = hd.clone().cross(across).multiplyScalar(s).normalize(), want = V(-s * R.roll, -1, 0); // roll: + lowers the little-finger side
       want.sub(hd.clone().multiplyScalar(want.dot(hd))).normalize();
       rotQ(ha, _q.setFromAxisAngle(hd, Math.atan2(palm.clone().cross(want).dot(hd), palm.dot(want))));
       // fingers drape over the thigh, thumb tucked alongside
       const pn = hd.clone().cross(wp(B[sd + "HandIndex1"]).sub(wp(B[sd + "HandPinky1"]))).multiplyScalar(s).normalize(), curlAx = hd.clone().cross(pn).normalize();
-      ["Index", "Middle", "Ring", "Pinky"].forEach((f, i) => [5 + i * 3, 9 + i * 2, 6].forEach((deg, j) => rotQ(B[sd + "Hand" + f + (j + 1)], _q.setFromAxisAngle(curlAx, deg * Math.PI / 180))));
-      [8, 10, 6].forEach((deg, j) => rotQ(B[sd + "HandThumb" + (j + 1)], _q.setFromAxisAngle(curlAx, deg * Math.PI / 180)));
+      ["Index", "Middle", "Ring", "Pinky"].forEach((f, i) => R.curl.forEach((deg, j) => rotQ(B[sd + "Hand" + f + (j + 1)], _q.setFromAxisAngle(curlAx, (deg + i * (j ? .5 : 1)) * Math.PI / 180))));
+      [-1, 0, 2].forEach((deg, j) => rotQ(B[sd + "HandThumb" + (j + 1)], _q.setFromAxisAngle(curlAx, deg * Math.PI / 180)));
     }
 
     // head turns: split between neck and head; the Rocketbox clavicles hang off the neck, so they are counter-rotated to keep her arms still
@@ -2178,7 +2550,7 @@ function wrapLines(g, text, maxW) {
   }
   function restart() {
     fadeThen(() => {
-      scrollTo(0, 0); prog = 0; vel = 0; smoothSpeed = 0; steer = 0; yaw = 0; pitch = 0; userYaw = 0; userPitch = 0;
+      scrollTo(0, 0); prog = INTRO_P; vel = 0; smoothSpeed = 0; steer = 0; yaw = 0; pitch = 0; userYaw = 0; userPitch = 0;
       introStart = performance.now(); $("intro").classList.remove("off");
       mu.on = false; mu.done = false; mu.fix = null; svr.visible = false; resetOrder(); passed = false;
       cv.hidden = true; radio.hold(false); card.classList.remove("on"); cardId = null; chapterIdx = -1;
@@ -2196,13 +2568,13 @@ function wrapLines(g, text, maxW) {
   addEventListener("pointerdown", e => { if (e.target.closest("button,a,#card,#cv")) return; dragging = true; lastX = e.clientX; lastY = e.clientY; });
   addEventListener("pointermove", e => {
     hoverX = e.clientX / innerWidth - .5; hoverY = e.clientY / innerHeight - .5;
-    if (!dragging || e.pointerType === "touch") return; userYaw = clamp(userYaw - (e.clientX - lastX) * .005, -2.2, 2.2); userPitch = clamp(userPitch - (e.clientY - lastY) * .003, -.5, .4); lastX = e.clientX; lastY = e.clientY; });
+    if (!dragging || e.pointerType === "touch") return; userYaw = clamp(userYaw - (e.clientX - lastX) * .005, -2.2, 2.2); userPitch = clamp(userPitch - (e.clientY - lastY) * .003, -.4, .4); lastX = e.clientX; lastY = e.clientY; });
   addEventListener("pointerup", () => dragging = false); addEventListener("pointercancel", () => dragging = false);
   addEventListener("keydown", e => { if (e.key === "r" || e.key === "R") lookHold = true; });
   addEventListener("keyup", e => { if (e.key === "r" || e.key === "R") lookHold = false; });
   const lookBtn = $("lookBtn"); let lookToggle = false;
-  lookBtn.onclick = () => { lookToggle = !lookToggle; lookBtn.textContent = lookToggle ? "Eyes on the road" : "Look at " + CV.friend; };
-  lookBtn.textContent = "Look at " + CV.friend;
+  lookBtn.onclick = () => { lookToggle = !lookToggle; lookBtn.textContent = lookToggle ? "Eyes on the road" : CV.friend; };
+  lookBtn.textContent = CV.friend;
 
   /* ------------------------------ sound: the MG's electric drive, tyres and wind, plus a bass-boosted radio ------------------------------ */
   let audio = null, muted = false;
@@ -2306,6 +2678,7 @@ function wrapLines(g, text, maxW) {
   function soundOn(on) {
     try {
       if (on && !audio) audio = startAudio();
+      if (on) voice.load();
       if (audio) { audio.on = on; audio.master.gain.setTargetAtTime(on ? .8 : 0, audio.ac.currentTime, .2); if (on) audio.ac.resume(); }
     } catch (e) { $("soundBtn").textContent = "Sound unavailable"; return; }
     radio.sound(on);
@@ -2313,7 +2686,7 @@ function wrapLines(g, text, maxW) {
   }
   $("soundBtn").onclick = () => { muted = !!(audio && audio.on); soundOn(!muted); };
   // browsers only allow sound after a click, tap or key press, so the first one starts the engine and the radio
-  const firstGesture = e => { if (e.target && e.target.id === "soundBtn") return; if (!muted && !(audio && audio.on)) soundOn(true); else if (audio && audio.on && audio.ac.state === "suspended") audio.ac.resume(); };
+  const firstGesture = e => { if (e.target && (e.target.id === "soundBtn" || (e.target.closest && e.target.closest("#enter")))) return; if (!muted && !(audio && audio.on)) soundOn(true); else if (audio && audio.on && audio.ac.state === "suspended") audio.ac.resume(); };
   ["pointerup", "keydown", "touchend"].forEach(ev => addEventListener(ev, firstGesture, { passive: true }));
   /* ------------------------------ radio: "Flower In A Hurricane" from the official YouTube upload ------------------------------ */
   // The song can't be bundled with the site, so it plays through YouTube's own embedded player, shown in a small panel.
@@ -2363,27 +2736,109 @@ function wrapLines(g, text, maxW) {
     };
   })();
   const soundOnFn = on => soundOn(on);
+  /* ------------------------------ voices: every subtitle read aloud, cut from one recording (audio/voices.mp3) ------------------------------ */
+  const ORDER_SHIFT = 4.8;
+  const voice = (() => {
+    // [start, end] in seconds within the recording, in script order: Dani's ten drive lines, her three Range Rover lines,
+    // Quinn's two lines and the worker's
+    const SEG = [[0, 5.33], [5.6, 11.08], [11.35, 14.77], [15.03, 20.8], [21.13, 27.73], [28, 32.38], [32.64, 36.33], [36.6, 40.02], [40.26, 45.64], [45.91, 50.36],
+      [50.67, 53.68], [53.88, 55.34], [55.63, 58.47], [58.7, 61.19], [61.5, 71.63], [71.84, 73.64]];
+    const texts = [...LINES.map(l => l[2]), MU_LINES[0][3], MU_LINES[1][3], MU_LINES[3][3], MU_LINES[2][3], ORDER_LINES[0][3], ORDER_LINES[1][3]];
+    const at = new Map(texts.map((t, i) => [t, SEG[i]]));
+    let buf = null, loading = false, cur = null, last = "", until = 0;
+    return {
+      load() { if (buf || loading || !audio) return; loading = true;
+        fetch("audio/voices.mp3").then(r => r.arrayBuffer()).then(a => new Promise((ok, no) => audio.ac.decodeAudioData(a, ok, no))).then(b => { buf = b; }).catch(() => { loading = false; }); },
+      say(text) {
+        if (!audio || !audio.on || !buf) { last = ""; return; }
+        if (text === last) return; last = text; const seg = text && at.get(text); if (!seg) return;
+        if (cur) try { cur.stop(); } catch (e) { }
+        const ac = audio.ac, s = ac.createBufferSource(), g = ac.createGain(); s.buffer = buf; g.gain.value = 1.15; s.connect(g); g.connect(audio.master);
+        s.start(0, seg[0], seg[1] - seg[0]); cur = s; until = performance.now() + (seg[1] - seg[0]) * 1000;
+      },
+      talking: () => performance.now() < until
+    };
+  })();
   function honk() { if (!audio || !audio.on) return; const ac = audio.ac; [415, 523].forEach(f => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(.12, ac.currentTime); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + .28); o.connect(g); g.connect(audio.master); o.start(); o.stop(ac.currentTime + .3); }); }
-  // the SVR's supercharged V8 going past on the left: catch-up, a burble alongside, a launch with a gear change, then crackles on the overrun
-  function svrRoar() {
-    if (!audio || !audio.on) return;
-    const { ac, gain, filt, chain, shaper, white, env } = audio, t0 = ac.currentTime;
-    const out = gain(0), lp = filt("lowpass", 900, 1.2);
-    const pan = ac.createStereoPanner ? ac.createStereoPanner() : gain(1);
-    const am = gain(1); chain(lp, shaper(2.6), am, out, pan, audio.master);
-    const rpm = [[0, 1900], [2.2, 2700], [2.6, 1400], [3.2, 2300], [3.5, 1400], [4.4, 1500], [5.1, 5200], [5.25, 3600], [6.2, 6100], [6.5, 1700], [9, 1400]];
-    const parts = [[1, "sawtooth", .5], [.5, "sawtooth", .45], [.25, "square", .3], [7.3, "sine", .05]].map(([h, type, v]) => {
-      const o = ac.createOscillator(); o.type = type; const g = gain(v); chain(o, g, h > 2 ? out : lp);
-      o.frequency.setValueAtTime(rpm[0][1] / 60 * 4 * h, t0); rpm.slice(1).forEach(([t, r]) => o.frequency.linearRampToValueAtTime(r / 60 * 4 * h, t0 + t));
-      o.start(t0); o.stop(t0 + 9.2); return o; });
-    // cross-plane burble: wobble the level at a quarter of the firing rate
-    const wob = ac.createOscillator(), wg = gain(.3); wob.frequency.value = 22; chain(wob, wg, am.gain); wob.start(t0); wob.stop(t0 + 9.2);
-    [[0, .0001], [2.2, .5], [4.4, .55], [5.0, .9], [6.4, .7], [8.5, .02]].forEach(([t, v]) => out.gain.linearRampToValueAtTime(v, t0 + t));
-    [[0, 700], [2.2, 1100], [4.4, 1000], [5.1, 2600], [6.4, 1800], [8, 900]].forEach(([t, f]) => lp.frequency.linearRampToValueAtTime(f, t0 + t));
-    if (pan.pan) [[0, -.2], [2.2, -.85], [4.4, -.8], [6.5, -.35], [8.5, -.1]].forEach(([t, p]) => pan.pan.linearRampToValueAtTime(p, t0 + t));
-    for (let k = 0; k < 12; k++) { const t = t0 + 6.5 + Math.random() * 1.6, s = ac.createBufferSource(), g = gain(0); s.buffer = white;
-      env(g, t, .002, .5 * (1 - (t - t0 - 6.5) / 2), .025); chain(s, filt("bandpass", 900 + Math.random() * 1600, 1.4), g, pan); s.start(t, Math.random()); s.stop(t + .06); }
+  // the SVR's supercharged 5.0 V8 going past on the left, synthesised into a stereo buffer when the moment starts (no samples).
+  // At the car: cross-plane firing pulses (order 1-5-4-8-6-3-7-2, so each bank fires unevenly, and every cylinder and cycle
+  // is a little different) ring the exhaust's low resonances and a rasp, with the supercharger's whine on top and crackles
+  // on the overrun. Then the pass as you hear it from the MG: the travel time of the sound (which is the Doppler shift),
+  // distance loss, air damping and the pan. The script follows the SVR moment in tick: catch up, burble alongside with a
+  // blip as he winks, a launch with a gear change, then off the throttle into the distance. svrRoar(ctx, dest) renders into
+  // any context (an OfflineAudioContext for testing).
+  // The render takes ~50-100 ms, so one is made ahead, in idle time, while the MG approaches the spot with the sound on.
+  let svrCache = null;
+  function svrRender(SR) {
+    const DUR = 9.4, NS = Math.ceil(DUR * SR), C = 343, LAT = 3.8;
+    const RPM = [[0, 1900], [1, 2300], [2, 2650], [2.3, 1550], [2.95, 1450], [3.1, 3700], [3.4, 1750], [3.8, 1500], [4.4, 1450], [4.6, 3000], [5.08, 5400], [5.2, 3800], [6.25, 6050], [6.5, 5500], [7.3, 3900], [8.4, 2900], [9.4, 2500]];
+    const THR = [[0, .45], [2, .55], [2.2, .04], [2.95, .04], [3.0, 1], [3.14, 0], [4.38, .08], [4.45, 1], [5.06, 1], [5.1, 0], [5.18, 1], [6.3, 1], [6.38, 0], [9.4, 0]];
+    const pw = (K, t) => { if (t <= K[0][0]) return K[0][1]; for (let i = 1; i < K.length; i++) if (t <= K[i][0]) { const [a, va] = K[i - 1], [b, vb] = K[i]; return va + (vb - va) * (t - a) / (b - a); } return K[K.length - 1][1]; };
+    const rel = te => te < 2.2 ? -16 + 17 * sstep(0, 2.2, te) : te < 4.4 ? 1 + Math.sin(te * 1.3) * .25 : 1 + 12.5 * (te - 4.4) * (te - 4.4) + 2 * (te - 4.4);
+    // 1. the engine at the car, as separate parts that are then mixed by loudness
+    const BD = Math.round(.0011 * SR), ex = new Float32Array(NS + BD + 2);
+    const BANK = [1, .66, 1, .66, .66, 1, .66, 1], CYL = [1, .92, 1.07, .96, 1.05, .9, 1.03, .94]; // left bank (nearest us) louder
+    const res = () => ({ a1: 0, a2: 0, b0: 0, y1: 0, y2: 0, e1: 0, e2: 0 });
+    const tune = (R, f, bw) => { const r = Math.exp(-Math.PI * bw / SR); R.a1 = 2 * r * Math.cos(2 * Math.PI * f / SR); R.a2 = r * r; R.b0 = (1 - r * r) / 2; };
+    const step = (R, e) => { const y = R.b0 * (e - R.e2) + R.a1 * R.y1 - R.a2 * R.y2; R.e2 = R.e1; R.e1 = e; R.y2 = R.y1; R.y1 = y; return y; };
+    const R1 = res(), R2 = res(), R3 = res(), parts = [0, 1, 2, 3, 4].map(() => new Float32Array(NS + 2));
+    let ph = 0, last = -1, rpm = RPM[0][1], thr = THR[0][1], wph = 0, env = 0, hiss = 0, p1 = 0, p2 = 0, kp = 0;
+    const kR = 1 - Math.exp(-64 / SR / .07), kT = 1 - Math.exp(-64 / SR / .03), envD = Math.exp(-1 / (.003 * SR));
+    for (let n = 0; n < NS; n++) {
+      if (!(n & 63)) { const t = n / SR; rpm += (pw(RPM, t) - rpm) * kR; thr += (pw(THR, t) - thr) * kT;
+        tune(R1, 48 + rpm * .006, 40); tune(R2, 140 + rpm * .03, 110); tune(R3, 650 + rpm * .1, 380); kp = 1 - Math.exp(-2 * Math.PI * (170 + rpm * .045 + 150 * thr) / SR); }
+      ph += rpm / 120 / SR; const k = Math.floor(ph * 8);
+      if (k !== last) { last = k; const c = k & 7, load = .25 + .75 * thr, lumpy = rpm < 2400 ? .6 : .25;
+        const a = load * (.55 + .45 * Math.min(1, rpm / 6000)) * BANK[c] * CYL[c] * (1 + (Math.random() - .5) * lumpy);
+        ex[BANK[c] < 1 ? n + BD : n] += a; env += a; }
+      const e = ex[n]; env *= envD; p1 += kp * (e - p1); p2 += kp * (p1 - p2); // the pulses, rounded off
+      hiss += .3 * ((Math.random() * 2 - 1) - hiss);
+      wph += rpm / 60 * 13.5 / SR; if (wph > 1) wph -= 1;
+      parts[0][n] = p2; parts[1][n] = step(R1, e); parts[2][n] = step(R2, p1);
+      parts[3][n] = step(R3, e * .5 + hiss * env * .6) * (.25 + .75 * thr);
+      parts[4][n] = (Math.sin(2 * Math.PI * wph) + .2 * Math.sin(4 * Math.PI * wph)) * (.12 + thr * Math.min(1, rpm / 5000) ** 1.5);
+    }
+    // the mix, by loudness over the busy part: pulses and low resonance carry it, the rasp and whine sit on top
+    const x = new Float32Array(NS + 2), W = [1, 1.1, .4, .1, .035], i0 = Math.floor(2.3 * SR), i1 = Math.floor(6.3 * SR);
+    const rms = W.map((_, k) => { let q = 0; for (let n = i0; n < i1; n++) q += parts[k][n] * parts[k][n]; return Math.sqrt(q / (i1 - i0)) + 1e-9; });
+    for (let n = 0; n < NS; n++) { let v = 0; for (let k = 0; k < 5; k++) v += parts[k][n] * W[k] / rms[k]; x[n] = v; }
+    let ms = 0; for (let n = Math.floor(2.3 * SR); n < 4.3 * SR; n++) ms += x[n] * x[n]; ms = Math.sqrt(ms / (2 * SR));
+    for (let n = 0; n < NS; n++) x[n] *= .2 / ms; // the burble alongside sits around -14 dBFS
+    // crackles and pops on the overrun: a short burst of filtered noise over a low thump
+    const pops = [], burst = (a, b, n, amp) => { for (let k = 0; k < n; k++) pops.push([a + (b - a) * Math.random(), amp * (.45 + .55 * Math.random())]); };
+    burst(3.16, 3.5, 3, .35); burst(5.1, 5.16, 1, .6); burst(6.4, 7.0, 10, .85); burst(7.0, 8.3, 9, .6);
+    pops.forEach(([tp, amp]) => { const n0 = Math.floor(tp * SR), len = (.004 + .012 * Math.random()) * SR, fc = 1 - Math.exp(-2 * Math.PI * (1200 + 1400 * Math.random()) / SR), tl = .018 * SR; let lp = 0, lp2 = 0;
+      for (let i = 0; i < len * 6 && n0 + i < NS; i++) { lp += fc * ((Math.random() * 2 - 1) - lp); lp2 += fc * (lp - lp2);
+        x[n0 + i] += amp * (3.2 * lp2 * Math.exp(-i / len) + .55 * Math.sin(2 * Math.PI * 78 * i / SR) * Math.exp(-i / tl) * Math.min(1, i / 24)); } });
+    // 2. at our ears: travel time (Doppler), distance, air, pan and a touch of interaural delay
+    const L = new Float32Array(NS), R = new Float32Array(NS);
+    const rd = q => { if (q < 0) return 0; const i = Math.floor(q), f = q - i; return i + 1 < NS ? x[i] + (x[i + 1] - x[i]) * f : 0; };
+    let g = 0, gl = 0, gr = 0, fc = 0, itd = 0, side = -1, tau = 0, dtau = 1, lpL = 0, lpR = 0, lp2L = 0, lp2R = 0;
+    for (let n = 0; n < NS; n++) {
+      if (!(n & 31)) { const t = n / SR, d = rel(t), r = Math.hypot(d, LAT), pan = -.72 * LAT / r;
+        g = Math.pow(Math.min(1, 4 / r), .8) * Math.min(1, t / .25) * Math.min(1, (DUR - t) / .6); gl = g * Math.cos((pan + 1) * Math.PI / 4); gr = g * Math.sin((pan + 1) * Math.PI / 4);
+        fc = 1 - Math.exp(-2 * Math.PI * Math.min(7000, 12000 / (1 + r / 12)) / SR); itd = Math.abs(pan) * .00045 * SR; side = pan < 0 ? -1 : 1;
+        tau = (t - r / C) * SR; dtau = 1 - (Math.hypot(rel(t + .001), LAT) - r) / .001 / C; }
+      const q = tau + (n & 31) * dtau, sl = rd(side < 0 ? q : q - itd), sr = rd(side < 0 ? q - itd : q);
+      lpL += fc * (sl - lpL); lp2L += fc * (lpL - lp2L); lpR += fc * (sr - lpR); lp2R += fc * (lpR - lp2R);
+      L[n] = Math.tanh(lp2L * gl * 1.1) / 1.1; R[n] = Math.tanh(lp2R * gr * 1.1) / 1.1;
+    }
+    return { SR, NS, L, R };
   }
+  function svrRoar(ctx, dest) {
+    const ac = ctx || (audio && audio.on ? audio.ac : null); if (!ac) return null;
+    const out = dest || audio.master, t0 = ac.currentTime + .03;
+    const rd = !ctx && svrCache && svrCache.SR === ac.sampleRate ? svrCache : svrRender(ac.sampleRate); svrCache = null;
+    const buf = ac.createBuffer(2, rd.NS, rd.SR); buf.getChannelData(0).set(rd.L); buf.getChannelData(1).set(rd.R);
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const hp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 28; hp.Q.value = .6;
+    const lo = ac.createBiquadFilter(); lo.type = "lowpass"; lo.frequency.value = 6500; lo.Q.value = .5;
+    const vol = ac.createGain(); vol.gain.value = .85;
+    src.connect(hp); hp.connect(lo); lo.connect(vol); vol.connect(out); src.start(t0);
+    return src;
+  }
+  setInterval(() => { try { if (audio && audio.on && !svrCache && !mu.on && prog > SVR_P - .12 && prog < SVR_P - .002)
+    (window.requestIdleCallback || setTimeout)(() => { if (!svrCache && audio && audio.on) svrCache = svrRender(audio.ac.sampleRate); }); } catch (e) { } }, 1500);
   function jingle() { if (!audio || !audio.on) return; const ac = audio.ac; [523, 659, 784, 1046].forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "triangle"; o.frequency.value = f; g.gain.setValueAtTime(0, ac.currentTime + i * .12); g.gain.linearRampToValueAtTime(.18, ac.currentTime + i * .12 + .02); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + i * .12 + .5); o.connect(g); g.connect(audio.master); o.start(ac.currentTime + i * .12); o.stop(ac.currentTime + i * .12 + .6); }); }
 
   /* ------------------------------ main loop ------------------------------ */
@@ -2391,7 +2846,7 @@ function wrapLines(g, text, maxW) {
   const order = { on: false, done: false, t0: 0, fly: null, opened: false };
   let daniYaw = 0, prog = 0, vel = 0, introStart = performance.now(), lastT = performance.now(), frame = 0, idle = 0, lastScroll = 0, chapterIdx = 0, steer = 0, yaw = 0, pitch = 0, passed = false, smoothSpeed = 0;
   addEventListener("scroll", () => { lastScroll = performance.now(); if (scrollY > 30) $("intro").classList.add("off"); }, { passive: true });
-  const INTRO_P = .05, INTRO_S = 11;
+  const INTRO_P = .05, INTRO_S = 11; prog = INTRO_P;
 
   function tick(now) {
     const frameMs = now - lastT, dt = Math.min(.05, frameMs / 1000); lastT = now; frame++; const tk0 = performance.now();
@@ -2399,7 +2854,7 @@ function wrapLines(g, text, maxW) {
     const maxS = Math.max(1, document.documentElement.scrollHeight - innerHeight);
     const u = clamp(scrollY / maxS, 0, 1);
     const introT = clamp((now - introStart) / 1000 / INTRO_S, 0, 1);
-    const introP = INTRO_P * (introT < 1 ? (1 - Math.cos(introT * Math.PI)) / 2 * .2 + introT * .8 : 1);
+    const introP = INTRO_P;
     const target = Math.max(scrollToProgress(u), introP);
     // a big jump back (Home key, dragging the scrollbar up) cuts to the new spot instead of reversing all the way
     if (target < prog - .08 && !fading) fadeThen(() => { const m = Math.max(1, document.documentElement.scrollHeight - innerHeight); prog = Math.max(scrollToProgress(clamp(scrollY / m, 0, 1)), INTRO_P); vel = 0; resetOrder(); }, 220);
@@ -2473,7 +2928,9 @@ function wrapLines(g, text, maxW) {
 
     // friend
     const muLine = mu.on ? MU_LINES.find(l => te >= l[0] && te < l[1]) : order.on ? ORDER_LINES.find(l => to >= l[0] && to < l[1]) : null;
-    const line = muLine ? [0, 0, muLine[3], muLine[2]] : order.on || order.done ? null : LINES.find(l => prog >= l[0] && prog < l[1]);
+    const introE = (now - introStart) / 1000, opening = prog < INTRO_P + .004 && !document.body.classList.contains("entering") ? (introE > 1 && introE < 6.6 ? LINES[0] : introE > 7 && introE < 12.6 ? LINES[1] : null) : null;
+    const line = muLine ? [0, 0, muLine[3], muLine[2]] : order.on || order.done ? null : opening || LINES.find(l => prog >= l[0] && prog < l[1]);
+    voice.say(line ? line[2] : "");
     const friendTalks = line && line[3] !== "Quinn" && line[3] !== "worker";
     const looking = yaw < -.8;
     const headYaw = order.on ? 1.05 : mu.on && te > .3 && te < 4.6 ? .95 : looking ? 1.15 : friendTalks ? .6 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
@@ -2481,18 +2938,18 @@ function wrapLines(g, text, maxW) {
     dani.turn(daniYaw, Math.sin(t * 1.9) * .025 * Math.min(1, speed / 10) + (friendTalks ? Math.sin(t * 6.5) * Math.sin(t * 2.3) * .06 : 0));
     dani.t.value = t; dani.talk = !!friendTalks; dani.wind.value = .2 + Math.min(1, smoothSpeed / 22) * .8;
 
-    if (order.on) {
-      if (worker.ch) { worker.ch.turn(Math.sin(t * .8) * .05, .22); worker.reach(sstep(6.7, 7.5, to) * (1 - sstep(8.4, 8.9, to))); }
-      if (to > 6.5 && worker.hand) {
+    if (order.on) { const tw = to - ORDER_SHIFT;
+      if (worker.ch) { worker.ch.turn(Math.sin(t * .8) * .05, .22); worker.reach(sstep(6.7, 7.5, tw) * (1 - sstep(8.4, 8.9, tw))); }
+      if (tw > 6.5 && worker.hand) {
         paper.visible = true;
-        if (to < 8.1) { worker.hand.getWorldPosition(paper.position); paper.position.add(FW.clone().multiplyScalar(-.05)).add(RT.clone().multiplyScalar(.12)); paper.lookAt(camera.getWorldPosition(tmpV)); }
+        if (tw < 8.1) { worker.hand.getWorldPosition(paper.position); paper.position.add(FW.clone().multiplyScalar(-.05)).add(RT.clone().multiplyScalar(.12)); paper.lookAt(camera.getWorldPosition(tmpV)); }
         else {
           if (!order.fly) order.fly = { p: paper.position.clone(), q: paper.quaternion.clone() };
-          const k = sstep(8.1, 9.0, to), tgt = camera.localToWorld(new THREE.Vector3(0, -.01, -.3)), cq = camera.getWorldQuaternion(new THREE.Quaternion());
+          const k = sstep(8.1, 9.0, tw), tgt = camera.localToWorld(new THREE.Vector3(0, -.01, -.3)), cq = camera.getWorldQuaternion(new THREE.Quaternion());
           paper.position.copy(order.fly.p).lerp(tgt, k); paper.position.y += Math.sin(k * Math.PI) * .12; paper.quaternion.copy(order.fly.q).slerp(cq, k);
         }
       }
-      if (to > 9.05 && !order.opened) { order.opened = true; order.on = false; order.done = true; paper.visible = false; openCV(true); }
+      if (tw > 9.05 && !order.opened) { order.opened = true; order.on = false; order.done = true; paper.visible = false; openCV(true); }
     }
 
     // sky + light
@@ -2547,31 +3004,53 @@ function wrapLines(g, text, maxW) {
     if ((mu.on && te < 6.5) || order.on || !cv.hidden) { if (cardId) { card.classList.remove("on"); cardId = null; } } else setCard(prog);
     const still = now - lastScroll > 2500 && speed < 1 && introT >= 1 && prog < .97 && cv.hidden;
     $("hint").classList.toggle("on", still);
-    if (introT >= 1 && prog > .03) $("intro").classList.add("off");
-    if (audio && audio.on && frame % 2 === 0) audio.update(smoothSpeed, accelNow, (mu.on && te < 7.5) || order.on);
-    radio.duck((mu.on && te < 7.5) || order.on);
+    if (introT >= 1 && prog > INTRO_P + .01) $("intro").classList.add("off");
+    const talk = voice.talking();
+    if (audio && audio.on && frame % 2 === 0) audio.update(smoothSpeed, accelNow, (mu.on && te < 7.5) || order.on || talk);
+    radio.duck((mu.on && te < 7.5) || order.on || talk);
 
     // the full-screen CV covers the scene, so skip drawing while it is open
     const tk1 = performance.now();
-    if (cv.hidden || order.opened && performance.now() - cvOpenedAt < 700) renderer.render(scene, camera);
+    if (cv.hidden || order.opened && performance.now() - cvOpenedAt < 700) drawScene();
     cost.js = lerp(cost.js, tk1 - tk0, .1); cost.gl = lerp(cost.gl, performance.now() - tk1, .1);
     adaptResolution(now, frameMs);
     requestAnimationFrame(tick);
   }
   const tmpV = new THREE.Vector3(), cost = { js: 0, gl: 0 };
+  // two passes: the city on layer 0 with a 0.25 m-2.6 km depth range, then a fresh depth buffer for the car, its cabin,
+  // Quinn, Dani and the CV paper on layer 1 at 2 cm-12 m. The car always sits in front of the city, so nothing is lost.
+  let layered = false;
+  function drawScene() {
+    if (!layered) { layered = true;
+      car.traverse(o => { if (!o.isLight) o.layers.set(1); }); paper.layers.set(1);
+      scene.traverse(o => { if (o.isLight) o.layers.enableAll(); });
+      renderer.autoClear = false; renderer.info.autoReset = false; }
+    renderer.info.reset(); renderer.clear();
+    camera.layers.set(0); camera.near = .25; camera.far = 2600; camera.updateProjectionMatrix(); renderer.render(scene, camera);
+    renderer.clearDepth();
+    camera.layers.set(1); camera.near = .02; camera.far = 12; camera.updateProjectionMatrix(); renderer.render(scene, camera);
+    camera.layers.enableAll();
+  }
   // drops the render resolution when frames run long and creeps it back up when there's headroom
   function adaptResolution(now, ms) {
     if (navigator.webdriver || document.hidden || ms > 250 || !cv.hidden) return;
     ftAvg = lerp(ftAvg, ms, .05); if (now - prT < 1500) return; prT = now;
     let np = pr;
-    if (ftAvg > 24 && pr > .6) { np = Math.max(.6, pr - .15); prLastDrop = now; }
-    else if (ftAvg < 18.5 && pr < PR_MAX && now - prLastDrop > 8000) np = Math.min(PR_MAX, pr + .1);
+    if (ftAvg > 26 && pr > .8) { np = Math.max(.8, pr - .1); prLastDrop = now; }
+    else if (ftAvg < 19 && pr < PR_MAX && now - prLastDrop > 5000) np = Math.min(PR_MAX, pr + .1);
     if (np !== pr) { pr = np; renderer.setPixelRatio(pr); resize(); }
   }
   window.__drive = { mu: te => { mu.on = true; mu.fix = te; }, jump: u => { scrollTo(0, u * (document.documentElement.scrollHeight - innerHeight)); prog = scrollToProgress(u); vel = 0; introStart = -1e9; },
     order: () => order, restart: () => restart(), info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, pr, js: +cost.js.toFixed(1), gl: +cost.gl.toFixed(1) }), scene, dbg: () => ({ cam: camera.getWorldPosition(new THREE.Vector3()).toArray(), car: car.position.toArray(), diner: diner.position.toArray(), FW: FW.toArray(), RT: RT.toArray(), worker: worker.ch && worker.ch.root.getWorldPosition(new THREE.Vector3()).toArray() }) };
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   requestAnimationFrame(t => { lastT = t; introStart = t; tick(t); setTimeout(() => $("loading").classList.add("off"), 250); });
+  document.body.classList.add("entering");
+  { const en = $("enter"), leave = sound => { en.classList.add("off"); document.body.classList.remove("entering"); en.setAttribute("aria-hidden", "true"); introStart = performance.now();
+      if (sound) { muted = false; soundOn(true); } else { muted = true; radio.sound(false); } setTimeout(() => en.remove(), 800); };
+    $("enterName").textContent = isPh(CV.surname) ? CV.name : fullName(); $("enterRole").textContent = CV.title;
+    $("enterBtn").onclick = () => leave(true); $("enterQuiet").onclick = () => leave(false);
+    $("enterCV").onclick = e => { e.preventDefault(); leave(false); openCV(); };
+    $("enterBtn").focus({ preventScroll: true }); }
 })().catch(err => {
   console.error(err);
   const l = document.getElementById("loading"); l.classList.remove("off");
