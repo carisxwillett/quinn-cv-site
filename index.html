@@ -149,6 +149,8 @@ button.small{padding:5px 8px;font-size:12px}
 #radio .st{font-size:13px;color:var(--muted);padding:0 10px 8px}
 #radio .st:empty{display:none}
 #radio .st a{color:var(--paper)}
+#radio .out{color:var(--paper);font-weight:700;text-decoration:none;padding:2px 6px;border:1px solid rgba(255,255,255,.3);font-size:13px;white-space:nowrap}
+#radio .out:focus-visible{outline:2px solid var(--sun)}
 #radio.closed .frame{display:none}
 
 @media (max-width:700px){
@@ -193,7 +195,7 @@ button.small{padding:5px 8px;font-size:12px}
 </div>
 <section id="cv" hidden aria-label="Quinn's CV"></section>
 <div id="radio" class="hud closed" hidden aria-label="Radio">
-  <div class="bar"><span class="tag">Radio</span><span class="song"><b>Flower In A Hurricane</b> · Justice ft. Tame Impala, SZA &amp; King Gizzard &amp; The Lizard Wizard</span><button id="radioToggle" class="small ghost">Play song</button></div>
+  <div class="bar"><span class="tag">Radio</span><span class="song"><b>Flower In A Hurricane</b> · Justice ft. Tame Impala, SZA &amp; King Gizzard &amp; The Lizard Wizard</span><a class="out" href="https://www.youtube.com/watch?v=JWxoRY7AFSw" target="_blank" rel="noopener" aria-label="Open Flower In A Hurricane on YouTube">YouTube ↗</a><button id="radioToggle" class="small ghost">Play song</button></div>
   <div class="frame" id="radioFrame"></div>
   <div class="st" id="radioStatus"></div>
 </div>
@@ -325,7 +327,8 @@ function wrapLines(g, text, maxW) {
   const loadImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; setTimeout(() => res(null), 20000); });
   const loadGLB = src => new Promise(res => { if (!THREE.GLTFLoader) return res(null); new THREE.GLTFLoader().load(src, res, undefined, () => res(null)); setTimeout(() => res(null), 30000); });
   const TEX_NAMES = ["asphalt", "paving", "grass", "sand", "facade_warm", "facade_grid", "facade_glass"];
-  const assetsP = Promise.all([Promise.all(TEX_NAMES.map(n => loadImg("tex/" + n + ".jpg"))), Promise.all(["models/dani.json", "models/driver.json", "models/driver.json"].map(loadGLB))]);
+  const armsP = loadGLB("models/interior_arms.json"); // Quinn's arms and hands for the driver's view
+  const assetsP = Promise.all([Promise.all(TEX_NAMES.map(n => loadImg("tex/" + n + ".jpg"))), Promise.all(["models/dani5.json", "models/driver.json", "models/driver.json"].map(loadGLB))]);
   try {
     await Promise.race([Promise.all([
       document.fonts.load("64px Anton"), document.fonts.load('700 40px "Barlow Condensed"'),
@@ -1307,61 +1310,143 @@ function wrapLines(g, text, maxW) {
     glass: withEnv(new THREE.MeshStandardMaterial({ color: 0xa8c8e0, transparent: true, opacity: .07, roughness: .02, metalness: .9, depthWrite: false })),
     glove: new THREE.MeshStandardMaterial({ color: 0x1d1612, roughness: .5 })
   };
+  // cabin materials. There are no shadows, so every cabin surface darkens with depth below the window line (standing in for
+  // the roof and doors), and the soft-touch plastic and leather get a fine grain that fades out before it can shimmer
+  const CAB_GLSL = `varying vec3 vCab;
+    float cabH(vec3 p) { p = fract(p * .1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
+    float cabN(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3. - 2. * f);
+      return mix(mix(mix(cabH(i), cabH(i + vec3(1., 0., 0.)), f.x), mix(cabH(i + vec3(0., 1., 0.)), cabH(i + vec3(1., 1., 0.)), f.x), f.y),
+        mix(mix(cabH(i + vec3(0., 0., 1.)), cabH(i + vec3(1., 0., 1.)), f.x), mix(cabH(i + vec3(0., 1., 1.)), cabH(i + vec3(1., 1., 1.)), f.x), f.y), f.z); }
+  `;
+  function cabin(m, grain = 0, bump = 0, occ = "mix(.3, 1., smoothstep(.42, 1.0, vCab.y))", envI = .5) {
+    m.extensions = { derivatives: true }; m.userData.envI = envI; m.envMapIntensity = envI;
+    m.onBeforeCompile = sh => {
+      sh.vertexShader = "varying vec3 vCab;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vCab = position;");
+      let f = CAB_GLSL + sh.fragmentShader;
+      if (grain) f = f.replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+        float gF = ${grain.toFixed(1)}, gK = 1. - smoothstep(.2, .8, length(fwidth(vCab)) * gF), gH = cabN(vCab * gF) + .5 * cabN(vCab * gF * 2.3);
+        { vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition), r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1);
+          normal = normalize(abs(det) * normal - sign(det) * (dFdx(gH) * r1 + dFdy(gH) * r2) * ${bump.toFixed(5)} * gK); }
+        roughnessFactor = clamp(roughnessFactor + (gH - .75) * .22 * gK, .04, 1.); diffuseColor.rgb *= 1. + (gH - .75) * .14 * gK;`);
+      f = f.replace("#include <aomap_fragment>", `#include <aomap_fragment>
+        float cOcc = ${occ}; reflectedLight.directDiffuse *= cOcc; reflectedLight.indirectDiffuse *= cOcc; reflectedLight.directSpecular *= cOcc; reflectedLight.indirectSpecular *= cOcc;`);
+      sh.fragmentShader = f;
+    };
+    return m;
+  }
+  const std = (c, r, mt = 0) => withEnv(new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: mt }));
+  const MI = {
+    soft: cabin(std(0x23252b, .5), 260, .00045, undefined, 1),                 // soft-touch dash top, binnacle, door tops
+    hard: cabin(std(0x141519, .45), 0, 0, undefined, .8),         // lower dash, column shroud, console, door bottoms
+    gloss: cabin(std(0x060608, .09, .35), 0, 0, "mix(.5, 1., smoothstep(.45, .95, vCab.y))", 1.1), // piano black
+    leather: cabin(std(0x1f1e22, .5), 420, .0003, undefined, .45),  // stitched dash insert, door inserts, armrests
+    fabric: cabin(std(0x5d5d63, .95), 0, 0, "mix(.45, .95, smoothstep(.9, 1.45, vCab.y))", .15), // headliner and pillar trims
+    stitch: cabin(std(0x7a7f88, .6)),
+    silver: std(0xb7bcc4, .26, .95),
+    vent: new THREE.MeshStandardMaterial({ color: 0x050506, roughness: .85 })
+  };
+  MI.silver.userData.envI = 1.1;
+  // the seat leather and headliner of the existing parts pick up the same treatment
+  cabin(M.leather, 420, .0003, undefined, .45); M.leather.color.set(0x232226); M.leather.roughness = .52;
   const beam = (a, b, t, mat) => { const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.BoxGeometry(t, d.length(), t), mat);
     m.position.copy(a).add(b).multiplyScalar(.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m; };
-  { // dashboard
-    const sh = new THREE.Shape(); sh.moveTo(.42, .55); sh.lineTo(.48, .84); sh.quadraticCurveTo(.54, .965, .74, .97); sh.lineTo(1.05, .955); sh.quadraticCurveTo(1.16, .94, 1.16, .86); sh.lineTo(1.16, .55); sh.lineTo(.42, .55);
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 1.74, bevelEnabled: true, bevelThickness: .03, bevelSize: .03, bevelSegments: 4, curveSegments: 14 });
-    g.rotateY(Math.PI / 2); g.translate(-.87, 0, 0); rig.add(new THREE.Mesh(g, M.dash));
-    rig.add(rbox(1.72, .006, .006, M.stitch, V(0, .945, -.52)));
-    rig.add(rbox(1.7, .03, .05, M.trim, V(0, .78, -.47)));
-    // binnacle
-    const bin = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, .22, 28, 1, true, Math.PI / 2, Math.PI), M.dash); bin.material.side = THREE.DoubleSide;
-    bin.rotation.x = Math.PI / 2; bin.position.set(-.4, .93, -.64); rig.add(bin);
-    // vents
-    [-.78, .66, -.05, .07].forEach(x => { const v = rbox(.16, .06, .03, M.trim, V(x, .86, -.47)); rig.add(v); for (let k = 0; k < 3; k++) rig.add(rbox(.15, .006, .035, M.chrome, V(x, .84 + k * .02, -.465))); });
-    // center screen
-    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.26, .16), new THREE.MeshBasicMaterial()); scr.position.set(.02, .88, -.5); scr.rotation.x = -.25; rig.add(scr); car.userData.screen = scr;
-    rig.add(rbox(.29, .19, .02, M.trim, V(.02, .88, -.512)).rotateX(-.25));
-    // gauges
-    const gauge = new THREE.Mesh(new THREE.PlaneGeometry(.34, .135), new THREE.MeshBasicMaterial()); gauge.position.set(-.4, .9, -.66); gauge.rotation.x = -.2; rig.add(gauge); car.userData.gauge = gauge;
-    // console + shifter
-    rig.add(soft(.28, .32, 1.0, .1, .05, M.dash, V(.02, .5, .02)));
-    rig.add(soft(.26, .1, .5, .05, .045, M.leather, V(.02, .69, .32)));
-    const knob = new THREE.Mesh(new THREE.CylinderGeometry(.045, .05, .04, 32), M.chrome); knob.position.set(.02, .68, -.12); rig.add(knob); rig.add(rbox(.2, .01, .2, M.trim, V(.02, .662, -.12)));
-    // pillars, roof rails and doors: curved tubes and padded panels rather than boxes
+  { // dashboard: the 2019 MG ZS EV's cabin as the driver sees it (rig space: x right, y up, driver faces -z, eyes at -.4, 1.27, .14)
+    // a z/y profile run across x; [z, y] is a line, [z, y, cz, cy] a curve through control point (cz, cy)
+    const runX = (cmds, x0, x1, mat, b = .012) => { const sh = new THREE.Shape();
+      cmds.forEach((c, i) => i === 0 ? sh.moveTo(-c[0], c[1]) : c.length === 2 ? sh.lineTo(-c[0], c[1]) : sh.quadraticCurveTo(-c[2], c[3], -c[0], c[1]));
+      const g = new THREE.ExtrudeGeometry(sh, { depth: x1 - x0 - 2 * b, bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelSegments: 3, curveSegments: 10 });
+      g.rotateY(Math.PI / 2); g.translate(x0 + b, 0, 0); const m = new THREE.Mesh(g, mat); rig.add(m); return m; };
+    const put = (m, x, y, z, rx = 0, ry = 0, rz = 0) => { m.position.set(x, y, z); m.rotation.set(rx, ry, rz); rig.add(m); return m; };
+    // an elliptical-section sweep along a curve: w across, t through (toward `out`)
+    const sweep = (pts, w, t, mat, out, n = 24) => { const c = new THREE.CatmullRomCurve3(pts), pos = [], idx = [], K = 10;
+      for (let i = 0; i <= n; i++) { const p = c.getPointAt(i / n), tg = c.getTangentAt(i / n), o = out.clone().sub(tg.clone().multiplyScalar(out.dot(tg))).normalize(), b = tg.clone().cross(o);
+        for (let k = 0; k < K; k++) { const a = k / K * Math.PI * 2, q = p.clone().addScaledVector(o, Math.cos(a) * t).addScaledVector(b, Math.sin(a) * w); pos.push(q.x, q.y, q.z); } }
+      for (let i = 0; i < n; i++) for (let k = 0; k < K; k++) { const a = i * K + k, b = i * K + (k + 1) % K; idx.push(a, b, a + K, b, b + K, a + K); }
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); const m = new THREE.Mesh(g, mat); rig.add(m); return m; };
+    // main dash body, set well back on the driver's side to clear the wheel and column, with the cluster recess cut out
+    const DASH = [[-.70, .5], [-.70, .86], [-.75, .935, -.70, .928], [-.86, .958, -.79, .956], [-1.0, .955], [-1.1, .93, -1.06, .948], [-1.17, .87], [-1.17, .5]];
+    runX(DASH, -.87, -.6, MI.soft, .014); runX(DASH, -.2, .87, MI.soft, .014);
+    runX([[-.70, .5], [-.70, .80], [-.735, .835, -.70, .83], [-.905, .835], [-.905, .956], [-1.0, .955], [-1.1, .93, -1.06, .948], [-1.17, .87], [-1.17, .5]], -.62, -.18, MI.soft, .012);
+    put(soft(.27, .011, .012, .005, .005, MI.silver), -.735, .74, -.69);
+    // passenger fascia: deeper, with a stitched leather insert over a satin strip, and the glovebox below
+    runX([[-.74, .58], [-.53, .58], [-.495, .62, -.495, .58], [-.495, .845], [-.565, .932, -.495, .926], [-.8, .956, -.68, .955], [-.8, .58]], .07, .87, MI.soft, .014);
+    put(soft(.74, .095, .022, .025, .009, MI.leather), .47, .805, -.482);
+    [.857, .753].forEach(y => put(new THREE.Mesh(new THREE.CylinderGeometry(.0012, .0012, .7, 4, 1), MI.stitch), .47, y, -.471, 0, 0, Math.PI / 2));
+    put(soft(.77, .011, .012, .005, .005, MI.silver), .47, .735, -.488);
+    put(soft(.62, .004, .006, .002, .002, MI.hard), .5, .655, -.49);
+    // centre stack: touchscreen in a gloss bezel at the top, two round vents, the climate panel, then down into the console
+    runX([[-.78, .44], [-.565, .44], [-.565, .62], [-.585, .80], [-.615, .925, -.598, .905], [-.70, .955, -.64, .955], [-.78, .955]], -.125, .165, MI.soft, .012);
+    put(soft(.262, .17, .022, .02, .008, MI.gloss), .02, .868, -.598, -.24);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(.224, .14), new THREE.MeshBasicMaterial()); scr.position.set(.02, .87, -.585); scr.rotation.x = -.24; rig.add(scr); car.userData.screen = scr;
+    put(soft(.25, .075, .018, .02, .007, MI.gloss), .02, .655, -.57, -.08);
+    [-.06, .02, .1].forEach(x => { const k = put(new THREE.Mesh(new THREE.CylinderGeometry(.017, .019, .02, 24), MI.silver), x, .655, -.555, Math.PI / 2 - .08); });
+    // round vents: a satin ring, a dark throat, three vanes and a centre knob
+    const vent = (x, y, z, r, ry = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; rig.add(g);
+      g.add(new THREE.Mesh(new THREE.TorusGeometry(r, r * .14, 8, 28), MI.silver));
+      const th = new THREE.Mesh(new THREE.CylinderGeometry(r * .95, r * .8, .03, 20, 1, true), MI.vent); th.rotation.x = Math.PI / 2; th.position.z = -.012; g.add(th);
+      const back = new THREE.Mesh(new THREE.CircleGeometry(r * .82, 28), MI.vent); back.position.z = -.026; g.add(back);
+      [-.45, 0, .45].forEach(k => { const v = new THREE.Mesh(new THREE.BoxGeometry(r * 1.8 * Math.sqrt(1 - k * k * .9), .003, .016), MI.hard); v.position.set(0, k * r, -.008); v.rotation.x = -.25; g.add(v); });
+      const kn = new THREE.Mesh(new THREE.CylinderGeometry(r * .16, r * .16, .016, 12), MI.silver); kn.rotation.x = Math.PI / 2; kn.position.z = -.004; g.add(kn); };
+    vent(-.052, .765, -.58, .039); vent(.092, .765, -.58, .039);
+    vent(-.79, .845, -.684, .044, .12); vent(.80, .84, -.478, .044, -.15);
+    // driver's side: the cluster under its hood, seen through the top of the wheel
+    { const arch = new THREE.Shape(), lg = -.075; arch.moveTo(.165, lg); arch.absarc(0, 0, .165, 0, Math.PI, false); arch.lineTo(-.165, lg); arch.lineTo(-.148, lg); arch.absarc(0, 0, .148, Math.PI, 0, true); arch.lineTo(.148, lg); arch.lineTo(.165, lg);
+      const hg = new THREE.ExtrudeGeometry(arch, { depth: .17, bevelEnabled: true, bevelThickness: .008, bevelSize: .007, bevelSegments: 3, curveSegments: 28 });
+      hg.scale(1.22, .7, 1); const hood = new THREE.Mesh(hg, MI.soft); hood.position.set(-.4, .905, -.93); rig.add(hood);
+      put(soft(.38, .15, .02, .02, .006, MI.hard), -.4, .9, -.888, -.3);
+      const gauge = new THREE.Mesh(new THREE.PlaneGeometry(.3, .12), new THREE.MeshBasicMaterial()); gauge.position.set(-.4, .9, -.873); gauge.rotation.x = -.3; rig.add(gauge); car.userData.gauge = gauge;
+      // bezels round the two dials
+      [-1, 1].forEach(s => { const ring = new THREE.Mesh(new THREE.TorusGeometry(.0485, .0032, 8, 40), MI.silver); ring.position.set(s * .0975, 0, .004); ring.position.applyEuler(gauge.rotation).add(gauge.position); ring.rotation.copy(gauge.rotation); rig.add(ring); });
+      // column shroud and stalks behind the wheel
+      const ax = V(0, Math.sin(.38), Math.cos(.38)), wc = V(-.4, .888, -.563);
+      rig.add(limb(wc.clone().addScaledVector(ax, -.05), wc.clone().addScaledVector(ax, -.24), .045, .058, MI.hard));
+      [-1, 1].forEach(s => { rig.add(limb(V(-.4 + s * .04, .86, -.665), V(-.4 + s * .17, .845, -.64), .0075, .006, MI.hard)); });
+      put(soft(.08, .05, .02, .02, .008, MI.hard), -.73, .74, -.69); put(new THREE.Mesh(new THREE.CylinderGeometry(.016, .016, .015, 20), MI.silver), -.73, .74, -.675, Math.PI / 2);
+    }
+    // centre console with the ZS EV's rotary drive selector, and the armrest
+    put(soft(.27, .3, 1.15, .08, .04, MI.hard), .02, .43, -.08);
+    put(soft(.2, .012, .42, .03, .006, MI.gloss), .02, .585, -.26);
+    put(new THREE.Mesh(new THREE.CylinderGeometry(.036, .04, .032, 32), MI.silver), .02, .605, -.2);
+    put(new THREE.Mesh(new THREE.TorusGeometry(.046, .004, 8, 32), MI.silver), .02, .592, -.2, Math.PI / 2);
+    [-.06, .1].forEach(x => put(soft(.03, .008, .02, .006, .003, MI.silver), x, .594, -.36));
+    put(soft(.25, .09, .48, .04, .035, M.leather), .02, .63, .3);
+    // doors: soft upper trim along the sill, leather insert, armrest with a satin pull, hard lower panel with a speaker grille
     [-1, 1].forEach(s => {
-      rig.add(tube([V(s * .87, .93, -1.13), V(s * .83, 1.18, -.78), V(s * .775, 1.42, -.42), V(s * .755, 1.49, -.24)], .042, M.paint));
-      rig.add(tube([V(s * .85, .95, -1.08), V(s * .812, 1.19, -.74), V(s * .76, 1.42, -.39), V(s * .742, 1.485, -.2)], .05, M.head));
-      rig.add(tube([V(s * .742, 1.485, -.2), V(s * .748, 1.495, .45), V(s * .755, 1.475, 1.32)], .056, M.head));
-      rig.add(tube([V(s * .85, .97, .74), V(s * .8, 1.24, .7), V(s * .752, 1.47, .66)], .068, M.head));
-      // door card, armrest, pull handle and the sill under the window
-      const card = soft(2.1, .54, .1, .07, .035, M.dash, V(s * .9, .71, .25)); card.rotation.y = Math.PI / 2; rig.add(card);
-      const arm = soft(1.4, .1, .13, .05, .045, M.leather, V(s * .84, .79, .32)); arm.rotation.y = Math.PI / 2; rig.add(arm);
-      const pull = soft(.28, .05, .05, .02, .02, M.trim, V(s * .855, .87, .05)); pull.rotation.y = Math.PI / 2; rig.add(pull);
-      rig.add(tube([V(s * .905, .985, -.86), V(s * .91, .995, .25), V(s * .9, .985, 1.36)], .038, M.dash));
-      rig.add(tube([V(s * .935, 1.0, -.86), V(s * .94, 1.012, .25), V(s * .93, 1.0, 1.36)], .02, M.paint));
-      const spk = new THREE.Mesh(new THREE.CircleGeometry(.07, 28), M.trim); spk.position.set(s * .848, .56, -.42); spk.rotation.y = -s * Math.PI / 2; rig.add(spk);
-      rig.add(soft(.03, .03, .14, .012, .012, M.chrome, V(s * .845, .86, -.2)));
+      sweep([V(s * .86, .965, -.86), V(s * .875, .985, -.3), V(s * .88, .99, .3), V(s * .875, .985, 1.25)], .045, .032, MI.soft, V(-s, 1, 0));
+      put(soft(.06, .16, 1.95, .03, .02, MI.soft), s * .89, .875, .2);
+      put(soft(.04, .2, 1.3, .03, .015, M.leather), s * .87, .69, .28);
+      put(soft(.1, .055, .72, .025, .022, MI.soft), s * .825, .78, .38);
+      put(soft(.022, .03, .13, .01, .008, MI.silver), s * .84, .87, -.06);
+      put(soft(.06, .42, 1.95, .03, .02, MI.hard), s * .9, .38, .2);
+      const spk = put(new THREE.Mesh(new THREE.CircleGeometry(.075, 28), MI.vent), s * .865, .4, -.45, 0, -s * Math.PI / 2);
+      put(new THREE.Mesh(new THREE.TorusGeometry(.078, .004, 6, 32), MI.silver), s * .864, .4, -.45, 0, -s * Math.PI / 2);
+      // mirror sail in the corner of the side window, and the A-pillar trim (painted edge outside, fabric inside)
+      sweep([V(s * .875, .935, -1.12), V(s * .835, 1.18, -.79), V(s * .78, 1.42, -.43), V(s * .758, 1.49, -.26)], .047, .02, MI.fabric, V(s, .3, -.7));
+      rig.add(tube([V(s * .885, .93, -1.14), V(s * .845, 1.18, -.8), V(s * .79, 1.43, -.44), V(s * .768, 1.5, -.26)], .022, M.paint));
+      sweep([V(s * .758, 1.49, -.26), V(s * .76, 1.5, .45), V(s * .762, 1.48, 1.3)], .04, .02, MI.fabric, V(s, 1, 0));
+      sweep([V(s * .85, .97, .74), V(s * .8, 1.24, .7), V(s * .755, 1.47, .66)], .055, .03, MI.fabric, V(s, 0, 0));
       // side mirror: a rounded housing on a short stalk
       const sm = new THREE.Group(); sm.position.set(s * 1.03, 1.03, -.68);
       const housing = new THREE.Mesh(new THREE.SphereGeometry(.5, 24, 16), M.paint); housing.scale.set(.25, .15, .1); housing.position.x = s * .05; sm.add(housing);
       const glassM = new THREE.Mesh(new THREE.CircleGeometry(.5, 28), M.chrome); glassM.scale.set(.21, .115, 1); glassM.position.set(s * .05, 0, .046); sm.add(glassM);
       sm.add(limb(V(-s * .09, -.03, 0), V(s * .0, -.01, 0), .022, .016, M.paint));
       rig.add(sm);
+      // sun visor folded up against the headliner
+      put(soft(.36, .016, .16, .03, .007, MI.fabric), s * .4 + (s > 0 ? .02 : 0), 1.468, -.2, -.06);
     });
-    // header rail over the windscreen and a curved headliner
-    rig.add(tube([V(-.755, 1.485, -.33), V(0, 1.515, -.36), V(.755, 1.485, -.33)], .05, M.head));
+    // windscreen header and a curved headliner
+    sweep([V(-.758, 1.49, -.27), V(0, 1.515, -.3), V(.758, 1.49, -.27)], .045, .022, MI.fabric, V(0, .5, -1));
     { const hl = new THREE.PlaneGeometry(1.5, 1.72, 18, 10); hl.rotateX(Math.PI / 2);
       const pa = hl.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) / .75, z = pa.getZ(i) / .86; pa.setY(i, -.05 * x * x - .015 * z * z); }
-      hl.computeVertexNormals(); const m = new THREE.Mesh(hl, M.head); m.position.set(0, 1.53, .5); rig.add(m);
-      const lamp = soft(.24, .02, .1, .03, .009, M.trim, V(0, 1.52, -.12)); rig.add(lamp); }
+      hl.computeVertexNormals(); const m = new THREE.Mesh(hl, MI.fabric); m.position.set(0, 1.53, .5); rig.add(m);
+      const lamp = soft(.24, .02, .1, .03, .009, MI.hard, V(0, 1.52, -.12)); rig.add(lamp); }
     // windshield
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.62, .94), M.glass); ws.position.set(0, 1.21, -.71); ws.rotation.x = .97; rig.add(ws);
-    // mirror + air freshener
-    rig.add(limb(V(.02, 1.5, -.5), V(.02, 1.45, -.6), .011, .009, M.trim));
-    const mir = new THREE.Group(); mir.position.set(.02, 1.43, -.62); mir.rotation.set(0.05, -.2, 0); mir.add(soft(.2, .06, .035, .025, .012, M.trim, V(0, 0, 0))); rig.add(mir);
-    const fresh = new THREE.Group(); fresh.position.set(.04, 1.4, -.6); rig.add(fresh); car.userData.fresh = fresh;
+    // rear-view mirror on its stalk from the top of the glass, and the air freshener hanging under it
+    rig.add(limb(V(.02, 1.43, -.43), V(.02, 1.385, -.49), .009, .008, MI.hard));
+    const mir = new THREE.Group(); mir.position.set(.02, 1.362, -.5); mir.rotation.set(.06, -.32, 0); rig.add(mir);
+    mir.add(soft(.22, .062, .03, .026, .011, MI.hard, V(0, 0, 0)), soft(.208, .051, .006, .022, .002, MI.gloss, V(0, 0, .014)));
+    const fresh = new THREE.Group(); fresh.position.set(.07, 1.335, -.5); rig.add(fresh); car.userData.fresh = fresh;
     fresh.add(beam(V(0, 0, 0), V(0, -.09, 0), .002, M.stitch));
     const ftex = canvasTex(128, 192, (g) => { g.fillStyle = "#3d8b3d"; g.beginPath(); for (let k = 0; k < 7; k++) { const a = -Math.PI / 2 + (k - 3) * .45; g.ellipse(64 + Math.cos(a) * 30, 60 + Math.sin(a) * 30 + 10, 34, 10, a, 0, Math.PI * 2); } g.fill(); g.fillStyle = "#7a5a3a"; g.fillRect(58, 70, 12, 110); g.fillStyle = "#ffd23f"; g.font = "700 26px 'Barlow Condensed'"; g.textAlign = "center"; g.fillText("LA", 64, 140); });
     const fm = new THREE.Mesh(new THREE.PlaneGeometry(.065, .1), new THREE.MeshBasicMaterial({ map: ftex, transparent: true, side: THREE.DoubleSide })); fm.position.y = -.14; fresh.add(fm);
@@ -1386,41 +1471,219 @@ function wrapLines(g, text, maxW) {
     [-.07, .07].forEach(x => seat.add(limb(V(x, 1.3, .3), V(x, 1.4, .31), .007, .007, M.chrome)));
     for (let k = 0; k < 4; k++) seat.add(rbox(.34, .005, .005, M.stitch, V(0, .7 + k * .14, .145 + k * .023)));
   }
-  // steering wheel
-  const wheelGrp = new THREE.Group(); wheelGrp.position.set(-.4, .84, -.47); wheelGrp.rotation.x = -.38; rig.add(wheelGrp);
-  const wheelSpin = new THREE.Group(); wheelGrp.add(wheelSpin); const hands = [];
-  { wheelSpin.add(new THREE.Mesh(new THREE.TorusGeometry(.185, .021, 16, 64), M.wheel));
-    [[.1, 0, 0], [-.1, 0, 0]].forEach(([x]) => wheelSpin.add(soft(.15, .04, .022, .018, .009, M.trim, V(x, -.01, 0))));
-    const lower = soft(.04, .12, .022, .018, .009, M.trim, V(0, -.1, 0)); wheelSpin.add(lower);
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(.06, .068, .05, 28), M.wheel); hub.rotation.x = Math.PI / 2; hub.position.z = .01; wheelSpin.add(hub);
-    const logo = canvasTex(128, 128, (g) => { g.fillStyle = "#151315"; g.fillRect(0, 0, 128, 128); g.strokeStyle = "#d9d9d9"; g.lineWidth = 6; g.beginPath(); for (let k = 0; k < 8; k++) { const an = Math.PI / 8 + k * Math.PI / 4; g.lineTo(64 + Math.cos(an) * 54, 64 + Math.sin(an) * 54); } g.closePath(); g.stroke(); g.fillStyle = "#e9e9e9"; g.font = "58px Anton"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("MG", 64, 68); });
-    const lg = new THREE.Mesh(new THREE.CircleGeometry(.048, 32), new THREE.MeshBasicMaterial({ map: logo })); lg.position.z = .037; wheelSpin.add(lg);
+  // steering wheel: the ZS's flat-bottomed three-spoke leather wheel, 37 cm across and about 80 cm from Quinn's eyes.
+  // tick() still sets wheelGrp.position.y (.84 at rest) and spins wheelSpin; the hub sits a touch higher on its column
+  const wheelGrp = new THREE.Group(); wheelGrp.position.set(-.4, .84, -.544); wheelGrp.rotation.x = -.38; rig.add(wheelGrp);
+  const wheelSpin = new THREE.Group(); wheelSpin.position.y = .052; wheelGrp.add(wheelSpin); const hands = [];
+  {
+    const WM = { rim: cabin(std(0x1d1c20, .46), 420, .0003, ".9", .5), hub: cabin(std(0x18181b, .6), 260, .0003, ".88", .5), pad: cabin(std(0x060608, .1, .35), 0, 0, ".9", 1.1), stitch: cabin(std(0x5d6168, .6), 0, 0, ".9") };
+    const add = (m, x = 0, y = 0, z = 0) => { m.position.set(x, y, z); wheelSpin.add(m); return m; };
+    // the rim: round on top, flattened along the bottom, slightly oval in section
+    const R = .185, rimPts = [], stPts = [];
+    for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a); let y = sn * R, x = c * R;
+      if (y < -.14) { x *= 1 + (-.14 - y) * 1.6; y = -.14 - (y + .14) * .16; } rimPts.push(V(x, y, 0)); stPts.push(V(x * .93, y * .93 + (y < -.12 ? .002 : 0), .0125)); }
+    const rimG = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rimPts, true), 112, .0165, 10, true); rimG.scale(1, 1, 1.18); add(new THREE.Mesh(rimG, WM.rim));
+    add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(stPts, true), 96, .0011, 3, true), WM.stitch));
+    // spokes at 9 and 3 with button pads and a satin edge, and a lower spoke with a satin insert
     [-1, 1].forEach(s => {
-      const hand = new THREE.Group(); hand.position.set(s * .185, .01, .015); wheelSpin.add(hand); hands.push(hand);
-      const palm = new THREE.Mesh(new THREE.SphereGeometry(.05, 16, 12), M.glove); palm.scale.set(.75, 1.15, .8); hand.add(palm);
-      const thumb = new THREE.Mesh(new THREE.SphereGeometry(.018, 10, 8), M.glove); thumb.scale.set(1, 2, 1); thumb.position.set(-s * .03, .035, .025); thumb.rotation.z = s * .7; hand.add(thumb);
-      const sleeve = new THREE.MeshStandardMaterial({ color: 0x23252b, roughness: .9 });
-      hand.add(limb(V(s * .02, -.02, .03), V(s * .14, -.22, .38), .032, .04, sleeve), limb(V(s * .14, -.22, .38), V(s * .2, -.36, .62), .04, .046, sleeve));
-    }); }
-
-  // Dani: a rigged 3D character posed in the passenger seat, arm out of the open window
+      add(soft(.12, .046, .026, .018, .009, WM.hub), s * .118, -.014, .002);
+      add(soft(.108, .006, .016, .003, .003, MI.silver), s * .12, .011, .004);
+      add(soft(.05, .028, .006, .009, .0025, WM.pad), s * .112, -.016, .016);
+      [-1, 1].forEach(k => add(new THREE.Mesh(new THREE.CylinderGeometry(.0045, .0045, .004, 12), MI.silver), s * .112 + k * .012, -.016, .02).rotation.x = Math.PI / 2);
+    });
+    add(soft(.052, .1, .024, .02, .009, WM.hub), 0, -.1, -.002);
+    add(soft(.026, .07, .006, .012, .0025, MI.silver), 0, -.1, .011);
+    // the airbag boss with the MG octagon, and the shroud behind it
+    add(soft(.155, .12, .052, .045, .02, WM.hub), 0, .004, .01);
+    const back = add(new THREE.Mesh(new THREE.CylinderGeometry(.05, .075, .07, 24), WM.hub), 0, 0, -.04); back.rotation.x = Math.PI / 2;
+    const logo = canvasTex(128, 128, (g) => { g.fillStyle = "#18181b"; g.fillRect(0, 0, 128, 128); g.strokeStyle = "#d9d9d9"; g.lineWidth = 6; g.beginPath(); for (let k = 0; k < 8; k++) { const an = Math.PI / 8 + k * Math.PI / 4; g.lineTo(64 + Math.cos(an) * 54, 64 + Math.sin(an) * 54); } g.closePath(); g.stroke(); g.fillStyle = "#e9e9e9"; g.font = "58px Anton"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("MG", 64, 68); });
+    add(new THREE.Mesh(new THREE.CircleGeometry(.026, 32), new THREE.MeshBasicMaterial({ map: logo })), 0, .008, .0365);
+    // hands[] are the grip points on the rim (tick moves hands[1] for the slap); the arms below reach for them
+    [-1, 1].forEach(s => { const h = new THREE.Group(); h.position.set(s * .185, .01, .015); wheelSpin.add(h); hands.push(h); });
+    mergeStatic(wheelSpin, new Set(hands));
+  }
+  // Quinn's arms: the Ready Player Me rig trimmed to arms, hands and jacket sleeves (models/interior_arms.json, hands re-skinned
+  // with fair skin, nails and knuckle creases). Each frame a two-bone IK puts the hands on the rim at about 9 and 3, so they turn
+  // with the wheel, and lets the right hand open and come off the rim when tick() moves hands[1] in for the slap.
+  const ARMS = await armsP;
+  if (ARMS) {
+    const root = ARMS.scene, B = {}, meshes = [], q4 = () => new THREE.Quaternion();
+    root.traverse(m => { if (m.isBone) B[m.name] = m;
+      if (m.isMesh) { m.frustumCulled = false; meshes.push(m); const mt = m.material; if (mt.map) mt.map.encoding = THREE.LinearEncoding;
+        if (/Skin/.test(mt.name)) { mt.roughness = .56; mt.emissive.setRGB(.05, .03, .027); withEnv(mt).userData.envI = .3; }
+        mt.needsUpdate = true; } });
+    const wrap = new THREE.Group(); wrap.rotation.y = Math.PI; wrap.add(root); rig.add(wrap); car.updateMatrixWorld(true);
+    const wp = (b, out = new THREE.Vector3()) => b.getWorldPosition(out);
+    { const mid = wp(B.LeftArm).add(wp(B.RightArm)).multiplyScalar(.5); rig.worldToLocal(mid); wrap.position.add(V(-.4, .965, -.02).sub(mid)); car.updateMatrixWorld(true); }
+    const basis = (F, D) => new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(F, D, F.clone().cross(D)));
+    const S = ["Left", "Right"].map(sd => {
+      const s = { sd, m: sd === "Left" ? 1 : -1 }, n = k => B[sd + k];
+      s.arm = n("Arm"); s.fore = n("ForeArm"); s.hand = n("Hand"); s.rest = [s.arm, s.fore, s.hand].map(b => b.quaternion.clone());
+      s.a = wp(s.fore).distanceTo(wp(s.arm)); s.b = wp(s.hand).distanceTo(wp(s.fore));
+      // the hand's own frame: F along the fingers, D out of the back of the hand; C carries that frame onto the hand bone
+      const H = wp(s.hand), D = wp(n("HandIndex1")).sub(H).cross(wp(n("HandPinky1")).sub(H)).normalize(); if (wp(n("HandThumb4")).sub(H).dot(D) > 0) D.negate();
+      const F = wp(n("HandMiddle1")).sub(H).normalize(); D.sub(F.clone().multiplyScalar(D.dot(F))).normalize();
+      s.C = basis(F, D).invert().multiply(s.hand.getWorldQuaternion(q4()));
+      s.fingers = ["Thumb", "Index", "Middle", "Ring", "Pinky"].map(f => [1, 2, 3].map(k => n("Hand" + f + k)));
+      s.fRest = s.fingers.map(f => f.map(b => b.quaternion.clone()));
+      return s;
+    });
+    // finger poses are local to the hand, so they are built once: closed round the rim, and nearly flat for the slap
+    const CURL = [[70, 95, 55], [72, 98, 55], [75, 98, 55], [78, 95, 50]], THUMB = [22, -12, 0, 15, 25];
+    const pose = (s, k) => {
+      const F = V(0, 0, -1), D = V(0, 1, 0), ax = F.clone().cross(D).negate();
+      s.hand.quaternion.copy(s.fore.getWorldQuaternion(q4()).invert().multiply(basis(F, D).multiply(s.C))); s.hand.updateMatrixWorld(true);
+      s.fingers.forEach((f, i) => f.forEach((b, j) => b.quaternion.copy(s.fRest[i][j]))); s.hand.updateMatrixWorld(true);
+      const t = THUMB.map(a => a * k); rotW(s.fingers[0][0], F, s.m * t[0]); rotW(s.fingers[0][0], D, s.m * t[1]); rotW(s.fingers[0][1], ax, t[3]); rotW(s.fingers[0][2], ax, t[4]);
+      CURL.forEach((c, i) => s.fingers[i + 1].forEach((b, j) => rotW(b, ax, c[j] * k)));
+      return s.fingers.map(f => f.map(b => b.quaternion.clone()));
+    };
+    S.forEach(s => { s.grip = pose(s, 1); s.open = pose(s, .12); });
+    const T = V(0, 0, 0), E = V(0, 0, 0), u = V(0, 0, 0), pv = V(0, 0, 0), pa = V(0, 0, 0), pb = V(0, 0, 0), qa = q4(), qb = q4(), wq = q4(), rq = q4();
+    const aim = (b, from, to) => { b.parent.getWorldQuaternion(qb); qa.setFromUnitVectors(from.normalize(), to.normalize()); b.quaternion.premultiply(qb.clone().invert().multiply(qa).multiply(qb)); b.updateMatrixWorld(true); };
+    function solve(s, wrist, F, D, pole, open) {
+      [s.arm, s.fore, s.hand].forEach((b, i) => b.quaternion.copy(s.rest[i])); s.arm.updateMatrixWorld(true);
+      const Ps = wp(s.arm, pa).clone(); T.copy(wrist);
+      const d = clamp(T.distanceTo(Ps), Math.abs(s.a - s.b) + 1e-3, s.a + s.b - 1e-3); u.copy(T).sub(Ps).normalize();
+      const ca = clamp((s.a * s.a + d * d - s.b * s.b) / (2 * s.a * d), -1, 1), sa = Math.sqrt(1 - ca * ca);
+      pv.copy(pole).addScaledVector(u, -pole.dot(u)).normalize();
+      E.copy(Ps).addScaledVector(u, s.a * ca).addScaledVector(pv, s.a * sa);
+      aim(s.arm, wp(s.fore, pb).sub(Ps), E.clone().sub(Ps));
+      const Pe = wp(s.fore, pb).clone(); aim(s.fore, wp(s.hand, pa).sub(Pe), T.clone().sub(Pe));
+      // roll the forearm toward the hand's twist (the rig has no twist bones, so the wrist alone would candy-wrap)
+      const Qh = basis(F, D).multiply(s.C), w = T.clone().sub(Pe).normalize();
+      const Dc = V(0, 1, 0).applyQuaternion(s.hand.getWorldQuaternion(q4()).multiply(s.C.clone().invert())); Dc.addScaledVector(w, -Dc.dot(w));
+      const Dt = D.clone().addScaledVector(w, -D.dot(w)), g = Math.atan2(w.dot(Dc.clone().cross(Dt)), Dc.dot(Dt)) * .8;
+      s.fore.parent.getWorldQuaternion(qb); qa.setFromAxisAngle(w, g); s.fore.quaternion.premultiply(qb.clone().invert().multiply(qa).multiply(qb)); s.fore.updateMatrixWorld(true);
+      s.hand.quaternion.copy(s.fore.getWorldQuaternion(q4()).invert().multiply(Qh));
+      s.fingers.forEach((f, i) => f.forEach((b, j) => b.quaternion.copy(s.grip[i][j]).slerp(s.open[i][j], open)));
+      s.hand.updateMatrixWorld(true);
+    }
+    const nn = V(0, 0, 1), qs = q4(), qg = q4();
+    function grip(i) {
+      const h = hands[i], s = i ? 1 : -1, x = h.position.x, y = h.position.y, k = sstep(0, 1, (.185 - Math.abs(x)) / .155);
+      const r = Math.hypot(x, y), an = Math.atan2(y, x) - s * .24 * (1 - k);
+      const lp = V(Math.cos(an) * r, Math.sin(an) * r, h.position.z - .015 + .036 * k);
+      // closed on the rim: fingers through it, back of the hand rolled up toward Quinn, knuckles tipped so the wrist sits low
+      const rr = V(Math.cos(an), Math.sin(an), 0), tt = V(-Math.sin(an), Math.cos(an), 0).multiplyScalar(s);
+      const F = V(0, 0, -1), D = rr.clone(), rot = (a, ang) => { qa.setFromAxisAngle(a.normalize(), ang); F.applyQuaternion(qa); D.applyQuaternion(qa); };
+      rot(rr.clone().cross(nn), .5); rot(F.clone().cross(tt), .45);
+      if (k > 0) { // flat on the horn pad for the slap, fingers up and in
+        const Fs = V(-s * .35, 1, .12).normalize(), Ds = nn.clone().addScaledVector(Fs, -nn.dot(Fs)).normalize();
+        qg.copy(basis(F, D)).slerp(qs.copy(basis(Fs, Ds)), k); F.set(1, 0, 0).applyQuaternion(qg); D.set(0, 1, 0).applyQuaternion(qg); }
+      wheelSpin.getWorldQuaternion(wq); const wrist = lp.clone().addScaledVector(F, -lerp(.105, .075, k)).addScaledVector(D, lerp(.03, .02, k));
+      wheelSpin.localToWorld(wrist); F.applyQuaternion(wq); D.applyQuaternion(wq);
+      solve(S[i], wrist, F, D, V(s * .4, -1, .35).applyQuaternion(rig.getWorldQuaternion(rq)), k);
+    }
+    // bones are posed just before the arms draw (after tick() has turned the wheel); each mesh has its own skeleton copy
+    let armsFrame = -1;
+    meshes.forEach(m => { m.onBeforeRender = (rd) => { if (rd.info.render.frame !== armsFrame) { armsFrame = rd.info.render.frame; grip(0); grip(1); } m.skeleton.update(); }; });
+  } else {
+    // fallback if the arms model can't load: simple skin-toned hands on the rim
+    const skinM = new THREE.MeshStandardMaterial({ color: 0xe6c3b0, roughness: .6 });
+    hands.forEach((hand, i) => { const s = i ? 1 : -1;
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(.05, 16, 12), skinM); palm.scale.set(.75, 1.15, .8); hand.add(palm);
+      const thumb = new THREE.Mesh(new THREE.SphereGeometry(.018, 10, 8), skinM); thumb.scale.set(1, 2, 1); thumb.position.set(-s * .03, .035, .025); thumb.rotation.z = s * .7; hand.add(thumb);
+      hand.add(limb(V(s * .02, -.02, .03), V(s * .14, -.22, .38), .032, .04, MI.fabric)); });
+  }
+  // Dani: Microsoft Rocketbox avatar "Female_Adult_17" (MIT licence, github.com/microsoft/Microsoft-Rocketbox), seated, hands in her lap, shades on
   const pal = new THREE.Group(); pal.position.set(.45, 0, .02); rig.add(pal);
-  const dani = { turn: () => { }, t: { value: 0 }, wind: { value: 0 } };
+  const dani = { turn: () => { }, t: { value: 0 }, wind: { value: 0 }, talk: false };
   if (GLB[0]) {
-    const ch = character(GLB[0]), B = ch.B;
-    rotW(B.Spine, AX.x, -5); rotW(B.Spine1, AX.x, -3);
-    for (const [sd, k] of [["Left", 1], ["Right", -1]]) { rotW(B[sd + "UpLeg"], AX.x, -84); rotW(B[sd + "UpLeg"], AX.y, k * 6); rotW(B[sd + "Leg"], AX.x, 82); rotW(B[sd + "Foot"], AX.x, -12); }
-    rotW(B.LeftArm, AX.z, -72); rotW(B.LeftArm, AX.y, -28); rotW(B.LeftForeArm, AX.y, -75);
-    rotW(B.RightArm, AX.z, 50); rotW(B.RightArm, AX.y, 12); rotW(B.RightForeArm, AX.x, -70);
-    // her hair puffs sway in the wind from the open window
-    ch.root.traverse(o => { if (o.isMesh) o.material.onBeforeCompile = sh => {
+    // the model is in metres, Y up, facing +Z, with her left on +X; everything below is posed in that space before she is seated
+    const ch = character(GLB[0]), B = ch.B, root = ch.root;
+    const v3 = () => new THREE.Vector3(), wp = (b, v = v3()) => b.getWorldPosition(v), _pq = new THREE.Quaternion(), _q = new THREE.Quaternion();
+    const rotQ = (b, q) => { b.parent.getWorldQuaternion(_pq); b.quaternion.premultiply(_pq.clone().invert().multiply(q).multiply(_pq)); b.updateMatrixWorld(true); };
+    const aim = (b, c, dir) => rotQ(b, _q.setFromUnitVectors(wp(c).sub(wp(b)).normalize(), dir.clone().normalize())); // turn b so its child c lies along dir
+    let hairMat = null;
+    root.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => {
+      m.metalness = 0;
+      if (/hair/.test(m.name)) { hairMat = m; m.alphaTest = .42; m.alphaToCoverage = true; m.side = THREE.DoubleSide; m.roughness = .55; }
+      else m.roughness = /head/.test(m.name) ? .6 : .82;
+    }); });
+
+    // sunglasses: oversized wayfarers wrapped round her face, built in the rest pose and parented to the head bone (one draw call)
+    {
+      const zc = x => .0665 - 7 * x * x, dzc = x => -14 * x; // the frame front follows this curve across the face
+      const shape = (w, h, dy = 0) => { const s = new THREE.Shape(); // inner (nose) edge at -w/2, outer edge at +w/2
+        s.moveTo(-w * .5, h * .46 + dy); s.lineTo(w * .5, h * .56 + dy); s.bezierCurveTo(w * .57, h * .12 + dy, w * .5, -h * .5 + dy, w * .08, -h * .5 + dy);
+        s.bezierCurveTo(-w * .24, -h * .5 + dy, -w * .47, -h * .36 + dy, -w * .5, h * .08 + dy); s.lineTo(-w * .5, h * .46 + dy); return s; };
+      const bend = (g, cx, cy, dz) => { // place on the left lens centre and wrap onto the curve (normals follow the bend)
+        const p = g.attributes.position, n = g.attributes.normal;
+        for (let i = 0; i < p.count; i++) { const x = cx + p.getX(i); p.setXYZ(i, x, cy + p.getY(i), zc(x) + p.getZ(i) + dz);
+          if (n) { const k = dzc(x), nx = n.getX(i) - k * n.getZ(i), l = Math.hypot(nx, n.getY(i), n.getZ(i)); n.setXYZ(i, nx / l, n.getY(i) / l, n.getZ(i) / l); } }
+        if (!n) g.computeVertexNormals(); return g; };
+      // lens: rings out from its centre with a slight dome, so highlights land as a spot instead of washing the whole lens
+      const lensGeo = (sh, rings = 4) => { const pts = sh.getPoints(12); pts.pop(); if (THREE.ShapeUtils.isClockWise(pts)) pts.reverse();
+        const n = pts.length, c = pts.reduce((a, q) => a.add(q), new THREE.Vector2()).multiplyScalar(1 / n), pos = [c.x, c.y, .005], idx = [];
+        for (let k = 1; k <= rings; k++) { const r = k / rings; pts.forEach(q => pos.push(c.x + (q.x - c.x) * r, c.y + (q.y - c.y) * r, .005 * (1 - r * r))); }
+        for (let i = 0; i < n; i++) idx.push(0, 1 + i, 1 + (i + 1) % n);
+        for (let k = 1; k < rings; k++) for (let i = 0; i < n; i++) { const a = 1 + (k - 1) * n + i, b = 1 + (k - 1) * n + (i + 1) % n; idx.push(a, a + n, b + n, a, b + n, b); }
+        const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g; };
+      const W = .054, H = .043, CX = .0315, CY = 1.611, parts = [], mirror = new THREE.Matrix4().makeScale(-1, 1, 1);
+      const both = (g, c) => parts.push([g, null, c], [g, mirror, c]);
+      const rim = shape(W, H); rim.holes.push(new THREE.Path(shape(W - .009, H - .011, -.0012).getPoints(14).reverse()));
+      both(bend(new THREE.ExtrudeGeometry(rim, { depth: .0042, bevelEnabled: true, bevelThickness: .001, bevelSize: .0009, bevelSegments: 2, curveSegments: 14 }), CX, CY, -.0042), 0x0b0a0b);
+      both(bend(lensGeo(shape(W - .0075, H - .0095, -.0012)), CX, CY, -.0066), 0x150f0c);
+      both(new THREE.BoxGeometry(.0065, .009, .008).translate(.0605, CY + .018, zc(.0605) - .0035), 0x0d0b0c); // end piece + hinge
+      both(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(.0625, CY + .018, zc(.0625) - .006), V(.0748, CY + .0165, -.004), V(.0782, CY + .012, -.045), V(.0758, CY - .002, -.07)]), 16, .0021, 6), 0x0d0b0c);
+      parts.push([new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(-.0075, CY + .0135, zc(.0075) - .0018), V(0, CY + .0152, zc(0) - .0016), V(.0075, CY + .0135, zc(.0075) - .0018)]), 8, .0024, 6), null, 0x0d0b0c]);
+      const shadesMat = shine(new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x2c2c2c, shininess: 160 }), .16);
+      const shades = new THREE.Mesh(mergeGeos(parts), shadesMat); shades.name = "dani-sunglasses";
+      root.updateMatrixWorld(true); B.Head.attach(shades);
+    }
+
+    // a relaxed, friendly face: lift the mouth corners and cheeks a little
+    { B.Head.getWorldQuaternion(_pq); const inv = _pq.clone().invert();
+      [["F_LMouthCorner", .0012, .0016, -.0006], ["F_RMouthCorner", -.0012, .0016, -.0006], ["F_LCheek", 0, .001, 0], ["F_RCheek", 0, .001, 0]].forEach(([n, x, y, z]) => {
+        const b = B[n]; if (b) { b.position.add(V(x, y, z).applyQuaternion(inv)); b.updateMatrixWorld(true); } }); }
+
+    // seated pose: lean back into the seat, thighs on the cushion, feet forward in the footwell
+    rotW(B.Spine1, AX.x, -4); rotW(B.Spine2, AX.x, -3); rotW(B.Neck, AX.x, 5);
+    for (const s of [1, -1]) { const sd = s > 0 ? "Left" : "Right";
+      aim(B[sd + "UpLeg"], B[sd + "Leg"], V(s * .1, .07, 1)); aim(B[sd + "Leg"], B[sd + "Foot"], V(s * .03, -1, .42)); aim(B[sd + "Foot"], B[sd + "ToeBase"], V(s * .1, -.3, 1)); }
+    // arms: two-bone IK puts each hand on top of her thigh, elbows back by her sides
+    for (const s of [1, -1]) { const sd = s > 0 ? "Left" : "Right", up = B[sd + "Arm"], fo = B[sd + "ForeArm"], ha = B[sd + "Hand"];
+      const S = wp(up), l1 = wp(fo).distanceTo(S), l2 = wp(ha).distanceTo(wp(fo));
+      const T = V(s * .118, 1.02, .18), d = Math.min(T.distanceTo(S), (l1 + l2) * .995), dir = T.clone().sub(S).normalize();
+      const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+      const pole = V(s * .55, -.1, -1).normalize(); pole.sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize();
+      const E = S.clone().add(dir.clone().multiplyScalar(a)).add(pole.multiplyScalar(h));
+      aim(up, fo, E.clone().sub(S)); aim(fo, ha, T.clone().sub(wp(fo)));
+      // hand: fingers forward along the thigh, palm down on it
+      aim(ha, B[sd + "HandMiddle1"], V(-s * .1, -.3, 1));
+      const hd = wp(B[sd + "HandMiddle1"]).sub(wp(ha)).normalize(), across = wp(B[sd + "HandIndex1"]).sub(wp(B[sd + "HandPinky1"]));
+      const palm = hd.clone().cross(across).multiplyScalar(s).normalize(), want = V(-s * .15, -1, 0);
+      want.sub(hd.clone().multiplyScalar(want.dot(hd))).normalize();
+      rotQ(ha, _q.setFromAxisAngle(hd, Math.atan2(palm.clone().cross(want).dot(hd), palm.dot(want))));
+      // fingers drape over the thigh, thumb tucked alongside
+      const pn = hd.clone().cross(wp(B[sd + "HandIndex1"]).sub(wp(B[sd + "HandPinky1"]))).multiplyScalar(s).normalize(), curlAx = hd.clone().cross(pn).normalize();
+      ["Index", "Middle", "Ring", "Pinky"].forEach((f, i) => [5 + i * 3, 9 + i * 2, 6].forEach((deg, j) => rotQ(B[sd + "Hand" + f + (j + 1)], _q.setFromAxisAngle(curlAx, deg * Math.PI / 180))));
+      [8, 10, 6].forEach((deg, j) => rotQ(B[sd + "HandThumb" + (j + 1)], _q.setFromAxisAngle(curlAx, deg * Math.PI / 180)));
+    }
+
+    // head turns: split between neck and head; the Rocketbox clavicles hang off the neck, so they are counter-rotated to keep her arms still
+    const qy = new THREE.Quaternion(), qx = new THREE.Quaternion(), comp = new THREE.Quaternion();
+    const ctl = [[B.Neck, .35], [B.Head, .65]].map(([b, k]) => { b.parent.getWorldQuaternion(_pq); const inv = _pq.clone().invert();
+      return { b, k, rest: b.quaternion.clone(), up: AX.y.clone().applyQuaternion(inv), side: AX.x.clone().applyQuaternion(inv) }; });
+    const neckRest = B.Neck.quaternion.clone(), kids = B.Neck.children.filter(c => c.isBone && c !== B.Head).map(c => ({ c, p: c.position.clone(), q: c.quaternion.clone() }));
+    const jaw = B.F_MJaw, jawRest = jaw && jaw.quaternion.clone(), jawAx = jaw && (jaw.parent.getWorldQuaternion(_pq), AX.x.clone().applyQuaternion(_pq.clone().invert()));
+    let jawOpen = 0;
+    dani.turn = (yaw, pitch) => {
+      ctl.forEach(c => { qy.setFromAxisAngle(c.up, yaw * c.k); qx.setFromAxisAngle(c.side, pitch * c.k); c.b.quaternion.copy(qy).multiply(qx).multiply(c.rest); });
+      comp.copy(B.Neck.quaternion).invert().multiply(neckRest);
+      kids.forEach(k => { k.c.position.copy(k.p).applyQuaternion(comp); k.c.quaternion.copy(comp).multiply(k.q); });
+      if (jaw) { const t = dani.t.value; jawOpen = lerp(jawOpen, dani.talk ? Math.abs(Math.sin(t * 10.5) * Math.sin(t * 3.7)) : 0, .35); jaw.quaternion.copy(qx.setFromAxisAngle(jawAx, jawOpen * .11)).multiply(jawRest); }
+    };
+    // a few loose strands of her hair stir in the wind from the open window (eyelashes, on the same texture, stay put)
+    if (hairMat) hairMat.onBeforeCompile = sh => {
       sh.uniforms.uT = dani.t; sh.uniforms.uWind = dani.wind;
       sh.vertexShader = "uniform float uT, uWind;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
-        float hw = smoothstep(1.47, 1.62, position.y) * smoothstep(0.07, 0.15, abs(position.x)) * uWind;
-        transformed += vec3(sin(uT*6.3 + position.y*24.0)*0.012, sin(uT*8.1 + position.x*30.0)*0.007, -0.02 - 0.016*sin(uT*5.2 + position.x*40.0)) * hw;`);
-    }; });
-    dani.turn = ch.turn;
-    seat(ch, pal, new THREE.Vector3(0, .66, -.04));
+        float lash = step(uv.y, 0.32) * (step(uv.x, 0.36) + step(0.86, uv.x));
+        float hw = (1.0 - lash) * smoothstep(1.63, 1.53, position.y) * uWind;
+        transformed += vec3(-0.004 + sin(uT*5.3 + position.y*42.0)*0.0035, 0.0, sin(uT*6.9 + position.y*31.0)*0.003) * hw;`);
+    };
+    seat(ch, pal, new THREE.Vector3(0, .655, .1));
   }
 
   // headlights
@@ -1431,22 +1694,36 @@ function wrapLines(g, text, maxW) {
 
   /* ------------------------------ dashboard textures ------------------------------ */
   const gaugeTex = canvasTex(640, 256, () => { }); car.userData.gauge.material.map = gaugeTex;
-  // the ZS EV's digital cluster: power/regen arc, big speed readout, battery arc
+  // the ZS EV's cluster: a power meter (charge / eco / power) and a speedometer either side of a small TFT
   function drawGauge(mph, power, battery) {
-    const { g } = gaugeTex.userData, w = 640, h = 256; g.clearRect(0, 0, w, h); g.fillStyle = "#05070b"; g.fillRect(0, 0, w, h);
-    const arc = (cx, frac, col, label, val) => {
-      g.save(); g.translate(cx, 150); g.lineCap = "round";
-      g.strokeStyle = "#1c2430"; g.lineWidth = 16; g.beginPath(); g.arc(0, 0, 92, Math.PI * .8, Math.PI * 2.2); g.stroke();
-      g.strokeStyle = col; g.beginPath(); g.arc(0, 0, 92, Math.PI * .8, Math.PI * (.8 + 1.4 * clamp(frac, .001, 1))); g.stroke();
-      g.fillStyle = "#e6edf5"; g.font = "40px Anton"; g.textAlign = "center"; g.fillText(val, 0, 14);
-      g.fillStyle = "#7f8b9b"; g.font = "600 20px 'Barlow Condensed'"; g.fillText(label, 0, 44); g.restore();
+    const { g } = gaugeTex.userData, w = 640, h = 256; g.fillStyle = "#020305"; g.fillRect(0, 0, w, h);
+    const A0 = Math.PI * .75, A1 = Math.PI * 2.25, R = 100, at = f => A0 + (A1 - A0) * clamp(f, 0, 1);
+    const dial = (cx, marks, zones, label, frac) => {
+      g.save(); g.translate(cx, 128);
+      const bg = g.createRadialGradient(0, -20, 10, 0, 0, R); bg.addColorStop(0, "#1a2130"); bg.addColorStop(1, "#05070b"); g.fillStyle = bg; g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.fill();
+      zones.forEach(([f0, f1, c]) => { g.strokeStyle = c; g.lineWidth = 5; g.beginPath(); g.arc(0, 0, R - 9, at(f0), at(f1)); g.stroke(); });
+      g.textAlign = "center"; g.textBaseline = "middle";
+      marks.forEach(([f, txt]) => { const a = at(f), big = txt != null, r1 = R - (big ? 24 : 17); g.strokeStyle = "#e6ecf3"; g.lineWidth = big ? 4 : 2;
+        g.beginPath(); g.moveTo(Math.cos(a) * (R - 12), Math.sin(a) * (R - 12)); g.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); g.stroke();
+        if (big) { g.fillStyle = "#eef3f8"; g.font = "600 20px 'Barlow Condensed', sans-serif"; g.fillText(txt, Math.cos(a) * (R - 40), Math.sin(a) * (R - 40)); } });
+      g.fillStyle = "#8d9bb0"; g.font = "600 16px 'Barlow Condensed', sans-serif"; g.fillText(label, 0, 46);
+      const a = at(frac); g.strokeStyle = "#ff4b2b"; g.lineWidth = 5; g.lineCap = "round";
+      g.beginPath(); g.moveTo(-Math.cos(a) * 14, -Math.sin(a) * 14); g.lineTo(Math.cos(a) * (R - 16), Math.sin(a) * (R - 16)); g.stroke();
+      g.fillStyle = "#222833"; g.beginPath(); g.arc(0, 0, 12, 0, Math.PI * 2); g.fill(); g.restore();
     };
-    arc(120, power, power > .6 ? "#ffb347" : "#3fd0c9", power < .03 ? "REGEN" : "POWER kW", String(Math.round(power * 105)));
-    arc(520, battery, "#4ade80", "BATTERY", Math.round(battery * 100) + "%");
-    g.textAlign = "center"; g.fillStyle = "#f2f6fb"; g.font = "92px Anton"; g.fillText(String(Math.round(mph)), 320, 150);
-    g.fillStyle = "#7f8b9b"; g.font = "600 22px 'Barlow Condensed'"; g.fillText("MPH", 320, 180);
-    g.fillStyle = "#4ade80"; g.fillText((mph < 1 ? "P" : "D") + " · RANGE " + Math.round(battery * 163) + " MI", 320, 222);
-    g.fillStyle = "#3fd0c9"; g.font = "700 18px 'Barlow Condensed'"; g.fillText("MG ZS EV", 320, 40);
+    const pm = []; for (let k = 0; k <= 8; k++) pm.push([k / 8, k === 0 ? "C" : k === 2 ? "0" : k === 8 ? "100" : k === 5 ? "50" : null]);
+    dial(110, pm, [[0, .25, "#3ddc84"], [.25, .6, "#3fa9f5"], [.6, 1, "#ffb347"]], "kW", power < .03 ? .14 : .25 + .75 * power);
+    const sm = []; for (let k = 0; k <= 12; k++) sm.push([k / 12, k % 2 ? null : String(k * 10)]);
+    dial(530, sm, [], "MPH", mph / 120);
+    // TFT between the dials
+    g.fillStyle = "#0a0f17"; g.beginPath(); const x0 = 226, y0 = 34, ww = 188, hh = 188, r = 14;
+    g.moveTo(x0 + r, y0); g.arcTo(x0 + ww, y0, x0 + ww, y0 + hh, r); g.arcTo(x0 + ww, y0 + hh, x0, y0 + hh, r); g.arcTo(x0, y0 + hh, x0, y0, r); g.arcTo(x0, y0, x0 + ww, y0, r); g.fill();
+    g.textAlign = "center"; g.textBaseline = "alphabetic";
+    g.fillStyle = "#4ade80"; g.font = "700 22px 'Barlow Condensed', sans-serif"; g.fillText(mph < 1 ? "P" : "D", 320, 66);
+    g.fillStyle = "#f2f6fb"; g.font = "62px Anton, Impact, sans-serif"; g.fillText(String(Math.round(mph)), 320, 134);
+    g.fillStyle = "#7f8b9b"; g.font = "600 17px 'Barlow Condensed', sans-serif"; g.fillText("MPH", 320, 154);
+    g.strokeStyle = "#3a4656"; g.lineWidth = 2; g.strokeRect(254, 168, 132, 14); g.fillStyle = "#4ade80"; g.fillRect(256, 170, 128 * clamp(battery, 0, 1), 10);
+    g.fillStyle = "#cfe8d8"; g.font = "600 17px 'Barlow Condensed', sans-serif"; g.fillText(Math.round(battery * 100) + "%  ·  " + Math.round(battery * 163) + " MI", 320, 206);
     gaugeTex.needsUpdate = true;
   }
   const TRACKS = [["Uptime Funk", "The Root Users"], ["Sudo Make Me a Sandwich", "DJ DHCP"], ["Ping Me Maybe", "Load Balancers"], ["Highway to the Cloud", "Kernel Panic"], ["California Server", "The Packet Loss"], ["Smells Like Clean Logs", "Nirvana Shell"]];
@@ -1693,7 +1970,7 @@ function wrapLines(g, text, maxW) {
   const SONG = { id: "JWxoRY7AFSw", title: "Flower In A Hurricane", url: "https://www.youtube.com/watch?v=JWxoRY7AFSw" };
   const radio = (() => {
     const el = $("radio"), box = $("radioFrame"), st = $("radioStatus"), btn = $("radioToggle");
-    let frame = null, ready = false, playing = false, sndOn = false, held = false, vol = -1, failTimer = 0;
+    let frame = null, ready = false, playing = false, sndOn = false, held = false, vol = -1, failTimer = 0, nudgeTimer = 0;
     const send = (func, args = []) => { if (frame && frame.contentWindow) frame.contentWindow.postMessage(JSON.stringify({ event: "command", func, args, id: 1, channel: "widget" }), "*"); };
     const beat = on => { if (audio) audio.beat = on; };
     const phone = () => matchMedia("(max-width:700px)").matches;
@@ -1701,7 +1978,7 @@ function wrapLines(g, text, maxW) {
     const fit = () => document.body.style.setProperty("--radio-h", el.hidden ? "0px" : el.offsetHeight + 8 + "px");
     if (window.ResizeObserver) new ResizeObserver(fit).observe(el); addEventListener("resize", fit);
     function stop(msg) {
-      clearTimeout(failTimer); if (frame) { frame.remove(); frame = null; } ready = playing = false; beat(true);
+      clearTimeout(failTimer); clearTimeout(nudgeTimer); if (frame) { frame.remove(); frame = null; } ready = playing = false; beat(true);
       el.classList.add("closed"); document.body.classList.remove("radio-open"); btn.textContent = "Play song"; st.innerHTML = msg || "";
     }
     function play() {
@@ -1709,18 +1986,19 @@ function wrapLines(g, text, maxW) {
       if (frame) { send("playVideo"); return; }
       const origin = /^https?:/.test(location.origin) ? "&origin=" + encodeURIComponent(location.origin) : "";
       frame = document.createElement("iframe"); frame.title = "Flower In A Hurricane on YouTube"; frame.allow = "autoplay; encrypted-media; picture-in-picture";
-      frame.src = `https://www.youtube.com/embed/${SONG.id}?autoplay=1&enablejsapi=1&playsinline=1&loop=1&playlist=${SONG.id}&rel=0${origin}`;
+      frame.referrerPolicy = "strict-origin-when-cross-origin";
+      frame.src = `https://www.youtube-nocookie.com/embed/${SONG.id}?autoplay=1&enablejsapi=1&playsinline=1&loop=1&playlist=${SONG.id}&rel=0${origin}`;
       frame.onload = () => { frame && frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*"); };
       box.appendChild(frame);
-      clearTimeout(failTimer); failTimer = setTimeout(() => { if (!ready) stop(`The song couldn't load here, so the car's own beat is on. <a href="${SONG.url}" target="_blank" rel="noopener">Listen on YouTube</a>`); }, 12000);
+      clearTimeout(failTimer); failTimer = setTimeout(() => { if (!ready) stop(`YouTube's player can't load on this page, so the car's own beat is playing. <a href="${SONG.url}" target="_blank" rel="noopener">Play the song on YouTube ↗</a>`); }, 9000);
     }
     addEventListener("message", e => {
       if (!frame || e.source !== frame.contentWindow) return;
       let d; try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch (err) { return; }
       if (!d || !d.event) return;
-      if (!ready && (d.event === "onReady" || d.event === "initialDelivery" || d.event === "infoDelivery")) { ready = true; clearTimeout(failTimer); vol = -1; if (sndOn && !held) send("playVideo"); else send("pauseVideo"); }
+      if (!ready && (d.event === "onReady" || d.event === "initialDelivery" || d.event === "infoDelivery")) { ready = true; clearTimeout(failTimer); vol = -1; if (sndOn && !held) send("playVideo"); else send("pauseVideo"); clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { if (frame && !playing && sndOn && !held) st.textContent = "Press ▶ on the player to start the song."; }, 2500); }
       const ps = d.info && d.info.playerState;
-      if (ps === 1) { playing = true; beat(false); st.textContent = ""; }
+      if (ps === 1) { playing = true; beat(false); st.textContent = ""; clearTimeout(nudgeTimer); }
       if (ps === 2 || ps === 0) { playing = false; }
       if (d.event === "onError") stop(`YouTube won't play the song here, so the car's own beat is on. <a href="${SONG.url}" target="_blank" rel="noopener">Listen on YouTube</a>`);
     });
@@ -1850,7 +2128,7 @@ function wrapLines(g, text, maxW) {
     const headYaw = order.on ? 1.05 : mu.on && te > .3 && te < 4.6 ? .95 : looking ? 1.15 : friendTalks ? .6 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
     daniYaw = lerp(daniYaw, headYaw, 1 - Math.exp(-dt * 3));
     dani.turn(daniYaw, Math.sin(t * 1.9) * .025 * Math.min(1, speed / 10) + (friendTalks ? Math.sin(t * 6.5) * Math.sin(t * 2.3) * .06 : 0));
-    dani.t.value = t; dani.wind.value = .2 + Math.min(1, smoothSpeed / 22) * .8;
+    dani.t.value = t; dani.talk = !!friendTalks; dani.wind.value = .2 + Math.min(1, smoothSpeed / 22) * .8;
 
     if (order.on) {
       if (worker.ch) { worker.ch.turn(Math.sin(t * .8) * .05, .22); worker.reach(sstep(6.7, 7.5, to) * (1 - sstep(8.4, 8.9, to))); }
