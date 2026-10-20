@@ -539,76 +539,175 @@ function wrapLines(g, text, maxW) {
     } mountains.count = k; }
   scene.add(mountains);
 
-  /* ------------------------------ buildings (one instanced mesh, windows in the shader) ------------------------------ */
+  /* ------------------------------ buildings: LA strip shops, stucco and brick blocks with shopfronts, glass towers downtown ------------------------------ */
+  // One instanced box per building. Windows, shopfronts, brick and curtain walls are drawn in the shader with box-filtered
+  // patterns that fade to their average once they get smaller than a pixel, so they stay crisp near and never shimmer far.
+  // Signs + awnings (one atlas, one instanced draw) and parapets/cornices/false fronts/AC units (one merged mesh) are geometry.
+  // New choices use their own generator so the shared rnd() sequence, and everything placed after the buildings, is unchanged.
+  const crnd = (() => { let q = 4242; return () => (q = (q * 16807) % 2147483647) / 2147483647; })(), cr = (a, b) => a + (b - a) * crnd();
   const bGeo = new THREE.BoxGeometry(1, 1, 1); bGeo.translate(0, 0.5, 0);
   const bU = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uSun: { value: sunDir }, uSunCol: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() }, uNight: { value: 0 } }]);
-  // photo facades: warm stucco blocks with windows, and two kinds of curtain-wall glass for the towers
-  // the facades are composed as straight, seamless tiles (4 bays x 4 floors), so they repeat rather than mirror
-  const RW = THREE.RepeatWrapping;
-  Object.assign(bU, { tWarm: { value: photo("facade_warm", 1, 1, "#c9a47f", RW) }, tGrid: { value: photo("facade_grid", 1, 1, "#7b8ca2", RW) }, tGlass: { value: photo("facade_glass", 1, 1, "#4a5a70", RW) } });
+  bU.uHor = skyU.uHor; bU.uTop = skyU.uTop; // the glass reflects the live sky
   const bMat = new THREE.ShaderMaterial({
-    uniforms: bU, fog: true,
-    vertexShader: `attribute vec3 aColor; attribute float aSeed; attribute float aTower;
-      varying vec3 vN; varying vec3 vLP; varying vec3 vC; varying float vSeed; varying vec3 vLN; varying float vTower;
+    uniforms: bU, fog: true, extensions: { derivatives: true },
+    vertexShader: `attribute vec3 aColor; attribute float aSeed; attribute float aType; attribute float aFront; attribute float aBase; attribute float aShop;
+      varying vec3 vN; varying vec3 vLP; varying vec3 vC; varying vec3 vLN; varying vec3 vWP;
+      varying float vSeed; varying float vType; varying float vFront; varying float vBase; varying float vShop; varying float vFW; varying float vH;
       #include <fog_pars_vertex>
       #include <common>
       #include <logdepthbuf_pars_vertex>
       void main(){
         vec3 sc = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
-        vLP = position*sc; vLN = normal; vC = aColor; vSeed = aSeed; vTower = aTower;
+        vLP = position*sc; vLN = normal; vC = aColor; vSeed = aSeed; vType = aType; vFront = aFront; vBase = aBase; vShop = aShop;
+        vFW = abs(normal.x) > 0.5 ? sc.z : sc.x; vH = sc.y;
         vN = normalize(mat3(modelMatrix)*mat3(instanceMatrix)*normal);
-        vec4 mvPosition = modelViewMatrix*instanceMatrix*vec4(position,1.0);
+        vec4 wp = modelMatrix*instanceMatrix*vec4(position,1.0); vWP = wp.xyz;
+        vec4 mvPosition = viewMatrix*wp;
         gl_Position = projectionMatrix*mvPosition;
         #include <logdepthbuf_vertex>
         #include <fog_vertex>
       }`,
-    fragmentShader: `uniform vec3 uSun, uSunCol, uAmb; uniform float uNight; uniform sampler2D tWarm, tGrid, tGlass;
-      varying vec3 vN; varying vec3 vLP; varying vec3 vC; varying float vSeed; varying vec3 vLN; varying float vTower;
+    fragmentShader: `uniform vec3 uSun, uSunCol, uAmb, uHor, uTop; uniform float uNight;
+      varying vec3 vN; varying vec3 vLP; varying vec3 vC; varying vec3 vLN; varying vec3 vWP;
+      varying float vSeed; varying float vType; varying float vFront; varying float vBase; varying float vShop; varying float vFW; varying float vH;
       #include <common>
       #include <fog_pars_fragment>
       #include <logdepthbuf_pars_fragment>
-      float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+      float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
+      // [a,b] repeating every c, box-filtered over w; becomes its mean once the period is sub-pixel
+      float pulse(float x, float c, float a, float b, float w){ float f = mod(x, c); w = max(w, 1e-4);
+        float v = clamp((min(f + w*0.5, b) - max(f - w*0.5, a))/w, 0.0, 1.0); return mix(v, (b - a)/c, smoothstep(0.25*c, 0.6*c, w)); }
+      float band(float x, float a, float b, float w){ w = max(w, 1e-4); return clamp((min(x + w*0.5, b) - max(x - w*0.5, a))/w, 0.0, 1.0); }
+      vec3 skyR(vec3 n){ vec3 V = normalize(vWP - cameraPosition); return mix(uHor, uTop, clamp(reflect(V, n).y*1.6, 0.0, 1.0)); }
       void main(){
         #include <logdepthbuf_fragment>
         vec3 n = normalize(vN);
         float diff = max(dot(n, uSun), 0.0);
-        vec3 col = vC*(uAmb + uSunCol*diff);
-        if (abs(vLN.y) < 0.5) {
-          float hc = abs(vLN.x) > 0.5 ? vLP.z : vLP.x;
-          vec2 fp = vec2(hc + vSeed*37.0, vLP.y);
-          vec2 tuv; vec2 cid; float win;
-          if (vTower > 0.5) {
-            bool grid = fract(vSeed*7.13) > 0.45;
-            tuv = fp/vec2(21.6, 14.4);
-            vec3 ph = grid ? texture2D(tGrid, tuv).rgb : texture2D(tGlass, tuv).rgb;
-            cid = floor(tuv*4.0); win = 1.0;
-            vec3 reflTint = mix(vec3(1.0, 0.66, 0.55), vec3(0.4, 0.34, 0.62), uNight);
-            vec3 glassC = mix(vC*(0.8 + (dot(ph, vec3(0.3, 0.59, 0.11)) - (grid ? 0.76 : 0.55))*0.9), ph, 0.12);
-            col = glassC*reflTint*(0.6 + 0.5*diff)*(uAmb*1.25 + uSunCol*0.45)*1.35;
+        vec3 light = uAmb + uSunCol*diff;
+        vec3 col;
+        if (abs(vLN.y) > 0.5) col = vC*0.6*light;
+        else {
+          // the work below is branched so each pixel only pays for what it shows (wall, window, shopfront)
+          bool xf = abs(vLN.x) > 0.5;
+          float u = (xf ? vLP.z : vLP.x) + vFW*0.5, y = vLP.y + vBase;
+          float wu = fwidth(u), wy = fwidth(y);
+          float fid = xf ? 2.0 + sign(vLN.x) : 6.0 + sign(vLN.z);
+          float sd = floor(vSeed*89.0 + 0.5); // integer seed: hashing the raw varying would amplify interpolation noise into speckle
+          vec3 wall = vC, glass = vec3(0.0), emis = vec3(0.0); float m = 0.0;
+          vec3 glt = uAmb*1.25 + uSunCol*0.4;
+          if (vType > 2.5) {
+            // curtain wall: mullions, spandrel bands, panel-to-panel tint, whole lit office floors at night
+            bool rib = fract(sd*0.4137) > 0.55;
+            float FH = 3.8, pw = rib ? 1.2 : 1.6;
+            float mu = pulse(u, pw, 0.0, rib ? 0.05 : 0.1, wu);
+            float sp = pulse(y, FH, 0.0, rib ? 1.5 : 0.5, wy);
+            m = (1.0 - sp)*(1.0 - mu);
+            wall = mix(rib ? mix(vC, vec3(0.85), 0.5) : vC*0.45, vC*0.3, mu*(1.0 - sp));
+            if (vBase < 0.5 && y < 6.0) { // double-height lit lobby
+              float lob = band(y, 0.0, 5.3, wy)*(1.0 - pulse(u, 3.0, 0.0, 0.15, wu));
+              wall = mix(wall, vec3(0.16), band(y, 0.0, 6.0, wy)); m = lob;
+              glass = mix(vec3(0.3, 0.27, 0.22), skyR(n), 0.25); emis = vec3(1.0, 0.86, 0.62)*(0.2 + 1.2*uNight)*lob;
+            } else if (wu > 0.7) { // far: the average of the near pattern, no per-panel work
+              glass = mix(vC*0.3, mix(uHor, uTop, 0.35)*0.9, 0.3);
+              emis = vec3(1.0, 0.88, 0.68)*(0.06 + 0.5*uNight)*uNight*1.15*m;
+            } else if (m > 0.001) {
+              float fl = floor(y/FH), pi = floor(u/pw);
+              float j = wu < 0.9 ? h2(vec2(pi, fl) + sd*0.31)*(1.0 - smoothstep(0.3, 0.9, wu)) : 0.0;
+              float fr = 1.0 - abs(dot(normalize(vWP - cameraPosition), n)); fr *= fr;
+              glass = mix(vC*0.3, skyR(n)*0.9, 0.1 + 0.5*fr)*(0.88 + 0.24*j);
+              if (uNight > 0.01) {
+                float lit = step(1.0 - (0.06 + 0.5*uNight), h2(vec2(floor(pi/5.0), fl) + sd*0.9 + fid));
+                emis = mix(vec3(1.0, 0.86, 0.62), vec3(0.82, 0.92, 1.0), fract(fl*0.37 + sd*0.11))*lit*uNight*1.15*m;
+              }
+            }
           } else {
-            tuv = fp/14.0;
-            vec3 ph = texture2D(tWarm, tuv).rgb;
-            // one window per 3.5 m bay, at the spot the tile was composed with
-            vec2 wc = fract(tuv*4.0);
-            win = smoothstep(0.19, 0.215, wc.x)*smoothstep(0.81, 0.785, wc.x)*smoothstep(0.215, 0.24, wc.y)*smoothstep(0.705, 0.68, wc.y);
-            vec3 wall = vC*(0.42 + dot(ph, vec3(0.3, 0.59, 0.11))*1.2);
-            col = mix(wall, ph*vec3(0.8, 0.88, 1.0), win)*(uAmb + uSunCol*diff)*1.1;
-            cid = floor(tuv*4.0);
+            float GH = 4.4, FH = 3.4;
+            if (vType > 1.5) { // brick, running bond; mortar and brick-to-brick tone fade out with distance
+              float row = floor(y/0.09), bx = u + mod(row, 2.0)*0.125;
+              float mo = max(pulse(y, 0.09, 0.0, 0.014, wy), pulse(bx, 0.25, 0.0, 0.014, wu));
+              wall *= 1.0 - 0.28*mo;
+              if (wu < 0.05) wall *= 1.0 + 0.16*(h2(vec2(floor(bx/0.25), row)) - 0.5)*(1.0 - smoothstep(0.015, 0.05, wu));
+            } else wall *= 0.93 + 0.07*smoothstep(0.0, 2.5, y);
+            if (y >= GH) {
+              // upper floors: punched windows on a per-building bay rhythm, with ledges, blinds, and lit rooms at night
+              float s1 = fract(sd*0.618), s2 = fract(sd*0.377 + 0.2), s3 = fract(sd*0.231 + 0.5);
+              float bw = 2.4 + floor(s1*4.0)*0.6, ww = bw*mix(0.38, 0.7, s2), wh = FH*mix(0.4, 0.6, s3);
+              float nb = floor((vFW - 1.2)/bw), off = (vFW - nb*bw)*0.5, bu = u - off, bi = floor(bu/bw);
+              float yy = y - GH, fl = floor(yy/FH), nf = floor((vBase + vH - GH - 0.5)/FH);
+              float inR = step(0.0, bi)*step(bi, nb - 1.0)*step(fl, nf - 1.0);
+              if (inR > 0.5 && wu > 0.7) { // far: window coverage and average glow only
+                m = (ww/bw)*(wh/FH);
+                glass = mix(vec3(0.2, 0.19, 0.18), mix(uHor, uTop, 0.35)*0.85, 0.4);
+                emis = vec3(1.0, 0.8, 0.55)*(0.08 + 0.55*uNight)*uNight*1.2*m;
+              } else if (inR > 0.5) {
+                float a0 = (bw - ww)*0.5, sill = 0.95, py = pulse(yy, FH, sill - 0.14, sill + wh, wy);
+                if (py > 0.0) {
+                  m = pulse(bu, bw, a0, a0 + ww, wu)*pulse(yy, FH, sill, sill + wh, wy);
+                  float ledge = pulse(bu, bw, a0 - 0.12, a0 + ww + 0.12, wu)*pulse(yy, FH, sill - 0.14, sill, wy);
+                  wall = mix(wall, wall*1.15 + 0.06, ledge);
+                  if (m > 0.001) {
+                    vec2 cid = vec2(bi, fl) + vec2(fid*13.0, sd*1.71);
+                    float r1 = h2(cid), r2 = fract(r1*13.7 + 0.31), ly = (mod(yy, FH) - sill)/wh;
+                    float blind = step(0.55, r2)*step(1.0 - mix(0.25, 0.75, r1), ly);
+                    glass = mix(mix(vec3(0.06, 0.07, 0.09), vec3(0.74, 0.67, 0.55), blind), skyR(n)*0.85, 0.3 + 0.25*r1*(1.0 - blind));
+                    if (uNight > 0.01) {
+                      float lit = step(1.0 - (0.08 + 0.55*uNight), fract(r1*7.31 + r2*3.17));
+                      vec3 lc = r1 < 0.85 ? mix(vec3(1.0, 0.74, 0.42), vec3(1.0, 0.9, 0.7), r2) : vec3(0.5, 0.62, 0.85);
+                      emis = lc*lit*uNight*(1.1 + 0.4*blind)*m;
+                    }
+                  }
+                }
+              }
+            } else if (vBase < 0.5) {
+              wall *= 0.9;
+              if (vShop > 0.5 && vFront*vLN.x > 0.5) {
+                // shopfront unit: painted pilasters and fascia, tiled bulkhead, display glass with a lit interior and
+                // stocked shelves, a glass door at one end; a few are closed behind roll-down shutters
+                float ub = vShop, si = floor(u/ub), x = u - si*ub;
+                float sh = h2(vec2(si, sd*1.3)), sh2 = fract(sh*17.3 + 0.13), sh3 = fract(sh*31.7 + 0.71);
+                vec3 paint = mix(wall, vec3(sh, sh2, sh3)*0.6 + 0.32, 0.4);
+                wall = mix(paint, vec3(0.14, 0.13, 0.13) + 0.22*vec3(sh3, sh, sh2), band(y, 0.0, 0.45, wy));
+                if (y < 3.25) {
+                  if (sh2 < 0.12) {
+                    float sm = band(x, 0.3, ub - 0.3, wu);
+                    wall = mix(wall, vec3(0.56, 0.57, 0.6)*(0.82 + 0.18*pulse(y, 0.1, 0.0, 0.05, wy)), sm);
+                  } else {
+                    float dx0 = sh > 0.5 ? 0.45 : ub - 1.55;
+                    float door = band(x, dx0, dx0 + 1.1, wu)*band(y, 0.0, 2.55, wy);
+                    float dIn = band(x, dx0 + 0.1, dx0 + 1.0, wu)*band(y, 0.08, 2.45, wy);
+                    float gz = band(x, 0.3, ub - 0.3, wu)*band(y, 0.45, 3.2, wy)*(1.0 - band(x, dx0 - 0.05, dx0 + 1.15, wu));
+                    float fr = clamp(pulse(x - 0.3, 1.7, 0.0, 0.07, wu) + band(y, 2.55, 2.65, wy), 0.0, 1.0);
+                    m = gz*(1.0 - fr) + dIn;
+                    wall = mix(wall, vec3(0.1, 0.1, 0.11), clamp(door*(1.0 - dIn) + gz*fr, 0.0, 1.0));
+                    if (m > 0.001) {
+                      vec3 hue = sh3 > 0.85 ? vec3(1.0, 0.72, 0.86) : (sh3 > 0.55 ? vec3(0.86, 0.95, 1.0) : vec3(1.0, 0.9, 0.7));
+                      vec3 inter = hue*(0.42 + 0.58*smoothstep(0.3, 3.2, y))*(1.0 - 0.45*pulse(y, 0.6, 0.0, 0.06, wy));
+                      if (wu < 0.05 && y > 0.5 && y < 2.4) { // stock on the shelves, close up only
+                        float cx = floor(x/0.3), cy = floor(y/0.6), hp = h2(vec2(cx, cy) + si + sd);
+                        inter *= 1.0 + (1.0 - smoothstep(0.015, 0.05, wu))*0.5*(vec3(hp, fract(hp*7.3), fract(hp*13.1)) - 0.5)*1.2;
+                      }
+                      glass = mix(inter*0.3, skyR(n)*0.8, 0.28*(1.0 - uNight));
+                      emis = inter*(0.2 + 0.85*uNight)*m;
+                    }
+                  }
+                }
+              }
+            }
           }
-          float lit = step(0.62 - uNight*0.3, h2(cid + vec2(vSeed*17.3, vLN.x*3.0 + vLN.z*7.0)));
-          vec3 lc = mix(vec3(1.0, 0.78, 0.45), vec3(0.8, 0.88, 1.0), h2(cid + 3.1));
-          col += lc*lit*uNight*1.2*win*step(3.4, vLP.y);
-          // ground floor shop band
-          col = mix(col, col*0.55 + vec3(1.0,0.5,0.3)*uNight*0.35*h2(vec2(vSeed,floor(hc/3.2))), (1.0-step(3.4, vLP.y))*(vTower>0.5?0.0:1.0));
-        } else col *= 0.75;
+          col = mix(wall*light, glass*glt, m) + emis;
+        }
         gl_FragColor = vec4(col, 1.0);
         #include <fog_fragment>
       }`
   });
   const STUCCO = ["#e0c9a6", "#cfa47f", "#e6b9a2", "#bcc7cb", "#d6d2b8", "#aab8a3", "#ead6b3", "#a1aabc", "#f0dcc8", "#c3a7c4"].map(c => new THREE.Color(c));
   const GLASS = ["#5d7088", "#4a5a70", "#7b8ca2", "#3c4a5c", "#8a8f9a"].map(c => new THREE.Color(c));
+  const BRICK = ["#9a4a36", "#a5563c", "#7e3f30", "#b0684a", "#8c5a44", "#a0705a"].map(c => new THREE.Color(c));
+  const PASTEL = ["#f2e3c6", "#e8a87c", "#9fc5c0", "#f4d58d", "#f0b8b0", "#c8d8a8", "#ffffff", "#e9e2d0", "#b8d0e8"].map(c => new THREE.Color(c));
   const bList = [];
-  const addB = (x, z, w, d, h, yaw, tower, y = 0) => bList.push({ x, z, w, d, h, yaw, tower, y });
+  const addB = (x, z, w, d, h, yaw, tower, y = 0) => { const b = { x, z, w, d, h, yaw, tower, y }; bList.push(b); return b; };
+  // which local x face (+1/-1) looks at the street: the street is `dir` from the building
+  const faceTo = (b, dx, dz) => Math.sign(dx * Math.cos(b.yaw) - dz * Math.sin(b.yaw)) || 1;
   for (let dd = 40; dd < L - 180; dd += rr(16, 30)) {
     const p = dd / L;
     for (const side of [-1, 1]) {
@@ -619,12 +718,14 @@ function wrapLines(g, text, maxW) {
       if (pos.z < COAST_Z - 2) continue;
       if (!clearOfRoad(pos, Math.hypot(w, d) / 2 + 4)) continue;
       const yaw = Math.atan2(-a.tan.x, -a.tan.z);
-      addB(pos.x, pos.z, w, d, freeway ? rr(6, 16) : rr(7, 26) * (rnd() < .12 ? 2 : 1), yaw, false);
+      const b = addB(pos.x, pos.z, w, d, freeway ? rr(6, 16) : rr(7, 26) * (rnd() < .12 ? 2 : 1), yaw, false);
+      b.fw = freeway; b.front = faceTo(b, -side * a.right.x, -side * a.right.z);
     }
   }
   for (let dd = L + 60; dd < L + EXT * STEP - 30; dd += rr(16, 28)) {
     const a = atX(dd), w = rr(12, 24), d = rr(12, 22), pos = a.pos.clone().add(a.right.clone().multiplyScalar(-(18 + rr(0, 12) + d / 2)));
-    addB(pos.x, pos.z, w, d, rr(7, 22), Math.atan2(-a.tan.x, -a.tan.z), false);
+    const b = addB(pos.x, pos.z, w, d, rr(7, 22), Math.atan2(-a.tan.x, -a.tan.z), false);
+    b.fw = false; b.front = faceTo(b, a.right.x, a.right.z);
   }
   // downtown towers
   for (let i = 0; i < 150; i++) {
@@ -636,23 +737,135 @@ function wrapLines(g, text, maxW) {
     addB(x, z, w, d, rr(50, 120) + 120 * Math.max(0, 1 - Math.hypot(x - 320, z + 600) / 200), 0, true);
   }
   // stepped tops on taller buildings so the skyline isn't all plain boxes
-  bList.slice().forEach(b => { if (b.h > 18 && rnd() < .7) { const k = rr(.55, .8); addB(b.x, b.z, b.w * k, b.d * k, b.h * rr(.25, .5), b.yaw, b.tower, b.h);
-    if (b.tower && rnd() < .6) addB(b.x, b.z, b.w * k * .6, b.d * k * .6, b.h * .2, b.yaw, true, b.h * 1.4); } });
+  bList.slice().forEach(b => { if (b.h > 18 && rnd() < .7) { const k = rr(.55, .8); addB(b.x, b.z, b.w * k, b.d * k, b.h * rr(.25, .5), b.yaw, b.tower, b.h).up = b; b.capped = true;
+    if (b.tower && rnd() < .6) addB(b.x, b.z, b.w * k * .6, b.d * k * .6, b.h * .2, b.yaw, true, b.h * 1.4).up = b; } });
+  // what each building is: 0 strip shops (one or two storeys, false front), 1 stucco block, 2 brick block, 3 glass tower.
+  // Street-side ground floors are split into shop units (b.shop = unit width).
+  bList.forEach(b => {
+    if (b.tower) { b.type = 3; b.front = 0; b.shop = 0; return; }
+    if (b.up) { b.type = b.up.type; b.front = 0; b.shop = 0; return; }
+    b.type = crnd() < .3 ? 2 : 1;
+    if (!b.capped && !b.fw && crnd() < .42) { b.type = 0; b.h = crnd() < .6 ? cr(4.9, 5.8) : cr(8.1, 9); }
+    else if (!b.capped && b.fw && crnd() < .3) { b.type = 0; b.h = cr(4.9, 6.5); }
+    const shops = b.type === 0 || crnd() < (b.fw ? .3 : .85);
+    b.shop = shops && b.d > 6 ? b.d / Math.max(1, Math.round(b.d / cr(6.5, 9))) : 0;
+  });
   const buildings = new THREE.InstancedMesh(bGeo, bMat, bList.length);
-  { const d = new THREE.Object3D(), col = new Float32Array(bList.length * 3), sd = new Float32Array(bList.length), tw = new Float32Array(bList.length);
+  { const d = new THREE.Object3D(), NI = bList.length, col = new Float32Array(NI * 3), sd = new Float32Array(NI), ty = new Float32Array(NI), fr = new Float32Array(NI), bs = new Float32Array(NI), sp = new Float32Array(NI);
     bList.forEach((b, i) => {
       d.position.set(b.x, b.y, b.z); d.rotation.set(0, b.yaw, 0); d.scale.set(b.w, b.h, b.d); d.updateMatrix(); buildings.setMatrixAt(i, d.matrix);
-      const c = (b.tower ? GLASS : STUCCO)[Math.floor(rnd() * (b.tower ? GLASS.length : STUCCO.length))]; col.set([c.r, c.g, c.b], i * 3); sd[i] = rnd(); tw[i] = b.tower ? 1 : 0;
+      let c = (b.tower ? GLASS : STUCCO)[Math.floor(rnd() * (b.tower ? GLASS.length : STUCCO.length))]; sd[i] = rnd();
+      if (b.up) c = b.up.col; else if (b.type === 2) c = BRICK[Math.floor(crnd() * BRICK.length)]; else if (b.type === 0 && crnd() < .6) c = PASTEL[Math.floor(crnd() * PASTEL.length)];
+      b.col = c; col.set([c.r, c.g, c.b], i * 3); ty[i] = b.type; fr[i] = b.front; bs[i] = b.y; sp[i] = b.shop;
     });
-    bGeo.setAttribute("aColor", new THREE.InstancedBufferAttribute(col, 3));
-    bGeo.setAttribute("aSeed", new THREE.InstancedBufferAttribute(sd, 1));
-    bGeo.setAttribute("aTower", new THREE.InstancedBufferAttribute(tw, 1)); }
+    const IA = (n, a, k) => bGeo.setAttribute(n, new THREE.InstancedBufferAttribute(a, k));
+    IA("aColor", col, 3); IA("aSeed", sd, 1); IA("aType", ty, 1); IA("aFront", fr, 1); IA("aBase", bs, 1); IA("aShop", sp, 1); }
   scene.add(buildings);
+
+  /* shop signs, awnings and rooftop signs: one instanced quad set over one canvas atlas (4 x 8 cells of 512 x 128;
+     rows 0-5 are signs, rows 6-7 striped awnings) */
+  const SIGNS = [["TACOS", "#d62828", "#ffe066"], ["DONUTS", "#ff8fab", "#ffffff"], ["LIQUOR", "#111111", "#ff3b3b", 1], ["COFFEE", "#3b2a20", "#f5e6c8"],
+    ["PHARMACY", "#ffffff", "#1a7f3c"], ["VINTAGE", "#2b2d42", "#ffb4a2", 1], ["NAILS", "#ffd6e8", "#c2185b"], ["BARBER", "#f4f1de", "#1d3557"],
+    ["PIZZA", "#2a9d8f", "#ffffff"], ["LAUNDROMAT", "#0077b6", "#ffffff"], ["BOBA", "#121212", "#7cf5c4", 1], ["99¢ STORE", "#ffd60a", "#c1121f"],
+    ["BURGERS", "#e63946", "#ffffff"], ["PHO", "#ffffff", "#e63946"], ["CHECKS CASHED", "#023e8a", "#ffd60a"], ["DENTAL", "#e0f2f1", "#00695c"],
+    ["TATTOO", "#0b0b0b", "#ff4fd8", 1], ["RECORDS", "#f77f00", "#111111"], ["JUICE BAR", "#80b918", "#ffffff"], ["BAKERY", "#fff1e6", "#9c6644"],
+    ["MARKET", "#2d6a4f", "#ffffff"], ["DRY CLEAN", "#ffffff", "#3a0ca3"], ["SUSHI", "#111111", "#ffffff", 1], ["MOTEL", "#14213d", "#ff006e", 1]];
+  const AWN = [["#c1121f", "#ffffff"], ["#1d3557", "#f1faee"], ["#2a9d8f", "#2a9d8f"], ["#f77f00", "#ffffff"], ["#2d6a4f", "#f1faee"], ["#7b2cbf", "#7b2cbf"], ["#ffd60a", "#e63946"], ["#3d3d3d", "#3d3d3d"]];
+  const atlas = canvasTex(2048, 1024, (g) => {
+    SIGNS.forEach(([t, bg, fg, neon], k) => { const x = (k % 4) * 512, y = Math.floor(k / 4) * 128;
+      g.fillStyle = bg; g.fillRect(x, y, 512, 128);
+      g.strokeStyle = neon ? fg : "rgba(0,0,0,.35)"; g.lineWidth = 6; g.strokeRect(x + 9, y + 9, 494, 110);
+      fitText(g, t, "#px Anton, 'Arial Black', Impact, sans-serif", 450, 92); g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = fg;
+      if (neon) { g.shadowColor = fg; g.shadowBlur = 18; }
+      g.fillText(t, x + 256, y + 68); g.shadowBlur = 0; });
+    AWN.forEach(([a, b], k) => { const x = (k % 4) * 512, y = 768 + Math.floor(k / 4) * 128;
+      for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? b : a; g.fillRect(x + i * 32, y, 32, 128); }
+      g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(x, y + 88, 512, 4); g.fillStyle = a; g.fillRect(x, y + 120, 512, 8); });
+  });
+  const sgGeo = new THREE.BufferGeometry(); {
+    const P = [], Nn = [], U = [], A = [];
+    // quad from corners (each [x, y, z, u, v]) in order, flipped if needed so its front faces `out`
+    const quad = (c, part, out) => { const e1 = V(c[1][0] - c[0][0], c[1][1] - c[0][1], c[1][2] - c[0][2]), e2 = V(c[2][0] - c[0][0], c[2][1] - c[0][1], c[2][2] - c[0][2]);
+      let nn = e1.cross(e2).normalize(); if (nn.dot(out) < 0) { c = [c[0], c[3], c[2], c[1]]; nn.negate(); }
+      [0, 1, 2, 0, 2, 3].forEach(k => { P.push(c[k][0], c[k][1], c[k][2]); Nn.push(nn.x, nn.y, nn.z); U.push(c[k][3], c[k][4]); A.push(part); }); };
+    quad([[.1, .05, .5, 0, 0], [.1, .05, -.5, 1, 0], [.1, 1, -.5, 1, 1], [.1, 1, .5, 0, 1]], 0, V(1, 0, 0));
+    quad([[.04, -.02, .5, 0, 1], [.04, -.02, -.5, 1, 1], [1.5, -.6, -.5, 1, .3], [1.5, -.6, .5, 0, .3]], 1, V(.37, .93, 0));
+    quad([[1.5, -.6, .5, 0, .3], [1.5, -.6, -.5, 1, .3], [1.5, -.9, -.5, 1, 0], [1.5, -.9, .5, 0, 0]], 1, V(1, 0, 0));
+    sgGeo.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); sgGeo.setAttribute("normal", new THREE.Float32BufferAttribute(Nn, 3));
+    sgGeo.setAttribute("uv", new THREE.Float32BufferAttribute(U, 2)); sgGeo.setAttribute("aPart", new THREE.Float32BufferAttribute(A, 1)); }
+  const sgU = { fogColor: bU.fogColor, fogNear: bU.fogNear, fogFar: bU.fogFar, fogDensity: bU.fogDensity, uSun: bU.uSun, uSunCol: bU.uSunCol, uAmb: bU.uAmb, uNight: bU.uNight, tAtlas: { value: atlas } };
+  const sgMat = new THREE.ShaderMaterial({ uniforms: sgU, fog: true, side: THREE.DoubleSide,
+    vertexShader: `attribute float aPart; attribute vec4 aSA; varying vec2 vUv; varying float vPart; varying float vCell; varying vec3 vN;
+      #include <fog_pars_vertex>
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      void main(){
+        vec3 p = position; float cell = aSA.z;
+        if (aPart < 0.5) p.z *= aSA.x; else { p.z *= aSA.y; cell = aSA.w; if (aSA.w < 0.0) p = vec3(0.0); }
+        vPart = aPart; vCell = cell; vUv = uv;
+        vN = normalize(mat3(modelMatrix)*mat3(instanceMatrix)*normal);
+        vec4 mvPosition = modelViewMatrix*instanceMatrix*vec4(p, 1.0);
+        gl_Position = projectionMatrix*mvPosition;
+        #include <logdepthbuf_vertex>
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform sampler2D tAtlas; uniform vec3 uSun, uSunCol, uAmb; uniform float uNight;
+      varying vec2 vUv; varying float vPart; varying float vCell; varying vec3 vN;
+      #include <common>
+      #include <fog_pars_fragment>
+      #include <logdepthbuf_pars_fragment>
+      void main(){
+        #include <logdepthbuf_fragment>
+        float c = floor(vCell + 0.5);
+        vec2 cuv = vec2((mod(c, 4.0) + vUv.x)/4.0, 1.0 - (floor(c/4.0) + 1.0 - vUv.y)/8.0);
+        vec3 t = texture2D(tAtlas, cuv).rgb;
+        vec3 n = normalize(vN)*(gl_FrontFacing ? 1.0 : -1.0);
+        vec3 light = uAmb + uSunCol*max(dot(n, uSun), 0.0);
+        vec3 col;
+        if (vPart < 0.5) col = gl_FrontFacing ? t*(light*0.95 + uNight*1.3) : vec3(0.2)*light;   // backlit box signs
+        else col = gl_FrontFacing ? t*(light*1.05 + uNight*0.12) : t*(light*0.5 + uNight*0.5);     // awnings, lit from the shop below
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+      }`
+  });
+  const signs = [], roofKit = [];
+  // a point in a building's frame (lx across, lz along its depth) to world
+  const bW = (b, lx, lz) => [b.x + lx * Math.cos(b.yaw) + lz * Math.sin(b.yaw), b.z - lx * Math.sin(b.yaw) + lz * Math.cos(b.yaw)];
+  bList.forEach(b => { if (!b.shop) return; const n = Math.round(b.d / b.shop);
+    for (let k = 0; k < n; k++) { const [x, z] = bW(b, b.front * b.w / 2, -b.d / 2 + (k + .5) * b.shop);
+      signs.push({ x, y: 3.3, z, yaw: b.yaw + (b.front > 0 ? 0 : Math.PI), s: 1, sw: Math.min(b.shop * .82, 4.2), aw: b.shop - .7, sc: Math.floor(crnd() * 23), ac: crnd() < .65 ? 24 + Math.floor(crnd() * 8) : -1 }); } });
+  // a few rooftop pole signs on low street-side buildings
+  bList.forEach(b => { if (b.type > 2 || b.up || b.capped || !b.front || b.h > 16 || crnd() > .14) return;
+    const lx = b.front * (b.w / 2 - 3), top = b.y + b.h, [x, z] = bW(b, lx, 0);
+    signs.push({ x, y: top + 1.1, z, yaw: b.yaw + (b.front > 0 ? 0 : Math.PI), s: 2.4, sw: 3.8, aw: 0, sc: [2, 23, 11, 0, 4][Math.floor(crnd() * 5)], ac: -1 });
+    for (const pz of [-3.2, 3.2]) roofKit.push([b, lx - b.front * .3, top + 1.3, pz, .22, 2.6, .22, new THREE.Color(0x4a4a4a)]); });
+  const signMesh = new THREE.InstancedMesh(sgGeo, sgMat, signs.length);
+  { const d = new THREE.Object3D(), sa = new Float32Array(signs.length * 4);
+    signs.forEach((g, i) => { d.position.set(g.x, g.y, g.z); d.rotation.set(0, g.yaw, 0); d.scale.setScalar(g.s); d.updateMatrix(); signMesh.setMatrixAt(i, d.matrix); sa.set([g.sw, g.aw, g.sc, g.ac], i * 4); });
+    sgGeo.setAttribute("aSA", new THREE.InstancedBufferAttribute(sa, 4)); }
+  signMesh.frustumCulled = false; scene.add(signMesh);
+
+  // roofs: parapets, cornices, strip-mall false fronts, sign posts and AC units, merged into one mesh
   { const roofTop = new Map(); bList.forEach(b => { const key = b.x + "," + b.z; const top = b.y + b.h; if (!roofTop.has(key) || roofTop.get(key).top < top) roofTop.set(key, { b, top }); });
     const units = []; roofTop.forEach(({ b, top }) => { for (let k = 0; k < 3; k++) units.push({ b, top, ox: rr(-.35, .35) * b.w, oz: rr(-.35, .35) * b.d, s: rr(1.2, 3), h: rr(.8, 2.2) }); });
-    const ug = new THREE.BoxGeometry(1, 1, 1); ug.translate(0, .5, 0);
-    const roof = new THREE.InstancedMesh(ug, new THREE.MeshLambertMaterial({ color: 0x8d8a86 }), units.length), d = new THREE.Object3D();
-    units.forEach((u, i) => { const c = Math.cos(u.b.yaw), sn = Math.sin(u.b.yaw); d.position.set(u.b.x + u.ox * c + u.oz * sn, u.top, u.b.z - u.ox * sn + u.oz * c); d.rotation.set(0, u.b.yaw, 0); d.scale.set(u.s, u.h, u.s * rr(.7, 1.4)); d.updateMatrix(); roof.setMatrixAt(i, d.matrix); });
+    const AC = new THREE.Color(0x8d8a86), CONC = new THREE.Color(0xd8d2c6);
+    units.forEach(u => roofKit.push([u.b, u.ox, u.top + u.h / 2, u.oz, u.s, u.h, u.s * rr(.7, 1.4), AC]));
+    bList.forEach(b => { const top = b.y + b.h, t = .3, ph = b.tower ? 1.4 : .9, cp = b.col.clone().multiplyScalar(b.type === 2 ? .8 : .88);
+      roofKit.push([b, b.w / 2 - t / 2, top + ph / 2, 0, t, ph, b.d, cp], [b, -b.w / 2 + t / 2, top + ph / 2, 0, t, ph, b.d, cp],
+        [b, 0, top + ph / 2, b.d / 2 - t / 2, b.w - 2 * t, ph, t, cp], [b, 0, top + ph / 2, -b.d / 2 + t / 2, b.w - 2 * t, ph, t, cp]);
+      if (b.type < 3) roofKit.push([b, 0, top - .3, 0, b.w + .5, .36, b.d + .5, b.type === 2 ? CONC : b.col.clone().lerp(CONC, .6)]);
+      if (b.type === 0 && b.front) { const fh = cr(1.2, 2.4); roofKit.push([b, b.front * (b.w / 2 - .1), top + fh / 2, 0, .3, fh, b.d * cr(.35, .7), b.col]); } });
+    // indexed unit box without its bottom face (never seen): 20 vertices and 10 triangles per box
+    const bx = new THREE.BoxGeometry(1, 1, 1), BP = bx.attributes.position.array, BN = bx.attributes.normal.array, BI = Array.from(bx.index.array).filter((_, k) => Math.floor(k / 6) !== 3);
+    const keepV = [...new Set(BI)].sort((x, y) => x - y), remap = new Map(keepV.map((v, k) => [v, k])), BI2 = BI.map(v => remap.get(v)), nv = keepV.length;
+    const pos = new Float32Array(roofKit.length * nv * 3), nor = new Float32Array(pos.length), cl = new Float32Array(pos.length), idx = new Uint32Array(roofKit.length * BI2.length); let o = 0;
+    roofKit.forEach(([b, lx, y, lz, sx, sy, sz, c], bi) => { const cs = Math.cos(b.yaw), sn = Math.sin(b.yaw), v0 = bi * nv;
+      BI2.forEach((v, k) => idx[bi * BI2.length + k] = v0 + v);
+      keepV.forEach(i => { const x = BP[i * 3] * sx + lx, z = BP[i * 3 + 2] * sz + lz, nx = BN[i * 3], nz = BN[i * 3 + 2];
+        pos[o] = b.x + x * cs + z * sn; pos[o + 1] = BP[i * 3 + 1] * sy + y; pos[o + 2] = b.z - x * sn + z * cs;
+        nor[o] = nx * cs + nz * sn; nor[o + 1] = BN[i * 3 + 1]; nor[o + 2] = -nx * sn + nz * cs; cl[o] = c.r; cl[o + 1] = c.g; cl[o + 2] = c.b; o += 3; }); });
+    const rg = new THREE.BufferGeometry(); rg.setAttribute("position", new THREE.BufferAttribute(pos, 3)); rg.setAttribute("normal", new THREE.BufferAttribute(nor, 3)); rg.setAttribute("color", new THREE.BufferAttribute(cl, 3)); rg.setIndex(new THREE.BufferAttribute(idx, 1));
+    const roof = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ vertexColors: true })); roof.frustumCulled = false;
     scene.add(roof); }
 
   /* ------------------------------ palm trees ------------------------------ */
@@ -1180,10 +1393,87 @@ function wrapLines(g, text, maxW) {
     g.userData.len = st.len; return g;
   }
   const TRAFFIC_COLORS = [0xe9e4da, 0x1d1d22, 0x2f6fb2, 0xc9a227, 0x8e1b1b, 0x5c6b73, 0x3fd0c9, 0xf2f2f2];
-  const traffic = [];
-  for (let i = 0; i < 14; i++) { const c = carModel(TRAFFIC_COLORS[i % TRAFFIC_COLORS.length], i); scene.add(c); traffic.push({ c, d: rr(0, L * ROAD_END), v: rr(13, 20), lane: rnd() < .5 ? -2.2 : -6, same: false }); }
-  for (let i = 0; i < 5; i++) { const c = carModel(TRAFFIC_COLORS[(i + 3) % TRAFFIC_COLORS.length], i + 1); scene.add(c); traffic.push({ c, d: rr(0, L * ROAD_END), v: rr(9, 15), lane: 2.2, same: true }); }
-  function clearSvrLane(d0) { let k = 0; traffic.forEach(c => { if (c.same && c.d > d0 - 80 && c.d < d0 + 320) c.d = d0 + 330 + 30 * k++; }); }
+  // Every car runs on its own clock and follows the car ahead in its lane (IDM), so nobody overlaps. Cars live in a
+  // window around Quinn and are recycled only far behind him or far ahead in the haze. Oncoming cars keep to the
+  // left lanes and the same-direction cars to the 2.2 lane. Quinn's lane (6) is left clear, apart from cars that
+  // briefly move over to let the SVR through.
+  const traffic = [], T_AHEAD = 620, T_BEHIND = 220, T_MAX = L + 440, Q_LANE = 6;
+  const qLane = d => lerp(6, -15, sstep(L - 150, L - 30, d)); // Quinn's offset along the road (same as laneAt in the loop)
+  const crossAt = lane => { let lo = 1e9, hi = -1e9; for (let d = L - 170; d <= L; d += .5) if (Math.abs(qLane(d) - lane) < 2.6) { lo = Math.min(lo, d); hi = Math.max(hi, d); } return [lo, hi]; };
+  const mkCar = (color, k, dir, lane, v0) => { const c = new THREE.Object3D(), st = STYLES[k % STYLES.length];
+    const o = { c, st, color, dir, home: lane, lane, x: lane, x0: lane, px: lane, lc: 1, v0n: v0, v: v0, d: -1e4, acc: 0, yaw: 0, spin: 0, half: st.len + .1, flee: 0, snap: true, cross: dir < 0 ? crossAt(lane) : null };
+    c.userData.tr = o; return o; };
+  // the rnd() calls match the old setup one for one, so the rest of the seeded city is unchanged
+  for (let i = 0; i < 14; i++) { rr(0, 1); const v = rr(13, 20); traffic.push(mkCar(TRAFFIC_COLORS[i % TRAFFIC_COLORS.length], i, -1, rnd() < .5 ? -2.2 : -6, v)); }
+  for (let i = 0; i < 5; i++) { rr(0, 1); traffic.push(mkCar(TRAFFIC_COLORS[(i + 3) % TRAFFIC_COLORS.length], i + 1, 1, 2.2, rr(9, 15))); }
+  // the whole fleet is drawn instanced: one mesh per body style (paint tinted per car, glass and lamps baked in as
+  // vertex colours) plus one mesh for every wheel (spoked, so the spin reads): at most four draw calls for all traffic
+  const tPaint = shine(new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0x777777, shininess: 60, vertexColors: true }), .14);
+  tPaint.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace("#include <color_vertex>", THREE.ShaderChunk.color_vertex.replace("vColor.xyz *= instanceColor.xyz;",
+    "vColor.xyz *= all(lessThan(abs(color.xyz - 1.0), vec3(.002))) ? instanceColor.xyz : vec3(1.0);")); }; // only pure-white (paint) vertices take the car's colour
+  const instOf = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = n; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
+  const catGeos = gs => { const out = new THREE.BufferGeometry(); ["position", "normal", "color"].forEach(a => { const arr = []; gs.forEach(g => arr.push(...g.attributes[a].array)); out.setAttribute(a, new THREE.Float32BufferAttribute(arr, 3)); }); return out; };
+  const bodyIM = STYLES.map(st => { const lamps = st.lightsG.clone(), C = lamps.attributes.color.array; for (let i = 0; i < C.length; i++) C[i] *= 2.6; // lamps stay bright under lighting
+    return instOf(catGeos([st.paintG, mergeGeos([[st.glassG, null, 0x10141c]]), lamps]), tPaint, traffic.filter(c => c.st === st).length); });
+  const wheelIM = (() => { const tyre = new THREE.CylinderGeometry(1, 1, .24, 14); tyre.rotateZ(Math.PI / 2);
+    const hub = new THREE.CylinderGeometry(.62, .62, .26, 14); hub.rotateZ(Math.PI / 2); const sp = new THREE.BoxGeometry(.27, 1.1, .2);
+    return instOf(mergeGeos([[tyre, null, 0x141416], [hub, null, 0x8a8e96], [sp, null, 0x2c2e33], [sp, M4(0, 0, 0, Math.PI / 2), 0x2c2e33]]), wheelMat, traffic.length * 4); })();
+  const bodyN = [0, 0, 0];
+  traffic.forEach((c, i) => { c.k = STYLES.indexOf(c.st); c.slot = bodyN[c.k]++; bodyIM[c.k].setColorAt(c.slot, new THREE.Color(c.color)); c.ws = i * 4; const st = c.st;
+    c.woff = [[-1, -st.wb], [1, -st.wb], [-1, st.wb], [1, st.wb]].map(([k, z]) => M4(k * (st.w / 2 - .14), st.r, z, 0, 0, 0, 1, st.r, st.r)); });
+  const wRot = new THREE.Matrix4(), wM = new THREE.Matrix4(), tFr = new THREE.Frustum(), tPM = new THREE.Matrix4(), tSph = new THREE.Sphere(new THREE.Vector3(), 4.5), tSeen = [0, 0, 0];
+  const laneBusy = (c, lane, d, r) => traffic.some(o => o !== c && Math.abs(o.x - lane) < 2.5 && Math.abs(o.d - d) < r);
+  function putCar(c, d, step) { // (re)spawn somewhere free in the car's own lane, out of sight
+    for (let k = 0; k < 40 && (d < 1 || d > T_MAX || laneBusy(c, c.home, d, 28)); k++) { d += step; if (d < 1 || d > T_MAX) { step = -step; d = clamp(d, 1, T_MAX) + step; } }
+    Object.assign(c, { d, lane: c.home, x: c.home, x0: c.home, px: c.home, lc: 1, v: c.v0n, flee: 0, snap: true });
+  }
+  const laneTo = (c, lane) => { c.x0 = c.x; c.lane = lane; c.lc = 0; };
+  let tLast = null;
+  // the SVR comes up the 2.2 lane: cars behind it just follow it, cars just ahead speed up and move over to Quinn's
+  // lane until it has gone past, and the few right beside Quinn (where it appears) are recycled out of sight
+  function clearSvrLane(d0) {
+    if (mu.cl) return; mu.cl = true; const catchUp = Math.max(0, vel - 15) ** 2 / 80;
+    traffic.forEach(c => { if (c.dir < 0 || Math.abs(c.x - 2.2) > 2.4) return; const r = c.d - d0;
+      if (r < -26 || r > 300) return;
+      if (r < 12 + catchUp) putCar(c, d0 + T_AHEAD - Math.random() * 40, 31); else c.flee = 1; });
+  }
+  function trafficStep(dt, q, qv, qx, sd, sv) {
+    if (tLast == null || Math.abs(q - tLast) > 40) { // first frame or a cut: deal the cars out around Quinn
+      traffic.forEach(c => { c.d = -1e4; }); traffic.forEach(c => putCar(c, q - T_BEHIND + Math.random() * (T_AHEAD + T_BEHIND), 31));
+    }
+    tLast = q;
+    const nearSvr = !mu.on && !mu.done && q > SVR_P * L - 400 && q < SVR_P * L - 20;
+    for (const c of traffic) {
+      const rel = c.d - q;
+      if (rel < -T_BEHIND || (c.dir < 0 && c.d < 2)) putCar(c, q + T_AHEAD - Math.random() * 60, 31);
+      else if (rel > T_AHEAD + 60 || c.d > T_MAX - 2) putCar(c, q - T_BEHIND + Math.random() * 60, -31);
+    }
+    for (const c of traffic) {
+      const rel = c.d - q;
+      let v0 = c.flee ? 30 : c.v0n, a0 = c.flee ? 5 : 1.8;
+      if (nearSvr && c.dir > 0 && rel > -10 && rel < 90) v0 = Math.min(v0, 7); // ease off and let Quinn by before the SVR shows up
+      // anything ahead of Quinn on the line he is about to drive gets out of his way
+      if (c.dir > 0 && rel > 0 && rel < 90 && Math.abs(qLane(c.d) - c.x) < 2.7) { v0 = Math.max(v0, Math.min(36, qv + 6)); a0 = 4; }
+      // car-following: nearest thing ahead in this lane (another car, Quinn, the SVR, or the drive-thru crossing)
+      let gap = 1e9, lv = 0;
+      for (const o of traffic) if (o !== c && Math.abs(o.x - c.x) < 2.4) { const ds = (o.d - c.d) * c.dir; if (ds > 0) { const g = ds - o.half - c.half; if (g < gap) { gap = g; lv = o.v * o.dir * c.dir; } } }
+      if (Math.abs(qx - c.x) < 2.6 && (q - c.d) * c.dir > 0) { const g = Math.abs(q - c.d) - 2.2 - c.half; if (g < gap) { gap = g; lv = qv * c.dir; } }
+      if (sd != null && c.dir > 0 && Math.abs(c.x - 2.2) < 2.4 && sd > c.d) { const g = sd - c.d - 2.5 - c.half; if (g < gap) { gap = g; lv = sv; } }
+      if (c.cross) { const [lo, hi] = c.cross; if (q > lo - 50 && q < hi + 2 && (q > lo - 8 || qv > 3) && c.d > hi + 1) { const g = c.d - hi - 3 - c.half; if (g < gap) { gap = g; lv = 0; } } }
+      const ss = 3 + Math.max(0, c.v * 1.2 + c.v * (c.v - lv) / (2 * Math.sqrt(a0 * 2.6)));
+      const free = Math.max(-3, a0 * (1 - Math.pow(c.v / Math.max(1, v0), 4)));
+      c.acc = clamp(free - (gap < 1e8 ? a0 * (ss / Math.max(gap, .3)) ** 2 : 0), -9, a0);
+      // SVR detour: over to Quinn's lane once clear ahead of him, back again once the SVR has gone by
+      if (c.flee === 1 && ((c.v > qv + 1 && rel > 8) || (rel > 10 + Math.max(0, qv - 15) ** 2 / 40 + Math.max(0, qv - c.v) ** 2 / 6 && (c.v > qv - 2 || rel > 24)))) { laneTo(c, Q_LANE); c.flee = 2; }
+      if (c.flee === 2 && c.lc >= 1 && (!mu.on || sd == null || sd > c.d + 14) && !laneBusy(c, 2.2, c.d + 2, 20) && !(sd != null && Math.abs(sd - c.d) < 16)) { laneTo(c, c.home); c.flee = 0; }
+    }
+    for (const c of traffic) { c.v = Math.max(0, c.v + c.acc * dt); c.d += c.dir * c.v * dt; c.lc = Math.min(1, c.lc + dt / (c.flee ? 1.3 : 1.8)); c.x = lerp(c.x0, c.lane, sstep(0, 1, c.lc)); }
+    // safety net: never let a car sit inside the one ahead of it
+    for (let pass = 0; pass < 2; pass++) for (const c of traffic) for (const o of traffic) {
+      if (o === c || Math.abs(o.x - c.x) >= 2.4) continue; const ds = (o.d - c.d) * c.dir;
+      if (ds > 0 && ds < o.half + c.half + .4) { c.d = o.d - c.dir * (o.half + c.half + .4); c.v = Math.min(c.v, Math.max(0, o.v * o.dir * c.dir)); }
+    }
+  }
   // a few cars parked in Byte Burger's bays
   [[-128, 0xe9e4da], [-113.5, 0x2f6fb2], [-93.2, 0x1d1d22], [-72.9, 0xc9a227], [-55.5, 0x5c6b73]].forEach(([d, col], k) => {
     const c = carModel(col, k + 2); c.position.copy(endP(d, -33.2)); c.rotation.y = Math.atan2(RT.x, RT.z); scene.add(c); });
@@ -1340,14 +1630,27 @@ function wrapLines(g, text, maxW) {
     hard: cabin(std(0x141519, .45), 0, 0, undefined, .8),         // lower dash, column shroud, console, door bottoms
     gloss: cabin(std(0x060608, .09, .35), 0, 0, "mix(.5, 1., smoothstep(.45, .95, vCab.y))", 1.1), // piano black
     leather: cabin(std(0x1f1e22, .5), 420, .0003, undefined, .45),  // stitched dash insert, door inserts, armrests
-    fabric: cabin(std(0x5d5d63, .95), 0, 0, "mix(.45, .95, smoothstep(.9, 1.45, vCab.y))", .15), // headliner and pillar trims
+    fabric: cabin(std(0x46464c, .9), 0, 0, "mix(.45, .95, smoothstep(.9, 1.45, vCab.y))", .2), // headliner and pillar trims
     stitch: cabin(std(0x7a7f88, .6)),
     silver: std(0xb7bcc4, .26, .95),
     vent: new THREE.MeshStandardMaterial({ color: 0x050506, roughness: .85 })
   };
   MI.silver.userData.envI = 1.1;
+  // closed cabin: carpet, perforated seat inserts, seam grooves and lightly tinted glass for the rear doors and tailgate
+  MI.carpet = cabin(std(0x18181b, .97), 700, .0009, undefined, .1);
+  MI.seatIn = cabin(std(0x2a292e, .5), 1100, .0006, undefined, .55);
+  MI.seam = cabin(std(0x0b0b0d, .7));
+  MI.tint = withEnv(new THREE.MeshStandardMaterial({ color: 0x2a3640, transparent: true, opacity: .2, roughness: .05, metalness: .5, depthWrite: false, side: THREE.DoubleSide }));
+  MI.tint.userData.envI = .9; MI.tint.envMapIntensity = .9;
+  // smooth shading for the bevelled upholstery: average face normals across shared positions, keeping creases sharper than ~57 degrees
+  const smoothN = (g, cosT = .55) => { g = g.index ? g.toNonIndexed() : g; const p = g.attributes.position, n = p.count, fn = [], keys = [], map = new Map(), a = V(0, 0, 0), b = V(0, 0, 0), c = V(0, 0, 0);
+    for (let i = 0; i < n; i += 3) { a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2); const f = b.sub(a).cross(c.sub(a)); fn.push(f.clone()); }
+    for (let i = 0; i < n; i++) { const k = Math.round(p.getX(i) * 2e4) + "," + Math.round(p.getY(i) * 2e4) + "," + Math.round(p.getZ(i) * 2e4); keys.push(k); if (!map.has(k)) map.set(k, []); map.get(k).push(fn[i / 3 | 0]); }
+    const out = new Float32Array(n * 3), s = V(0, 0, 0);
+    for (let i = 0; i < n; i++) { const own = fn[i / 3 | 0].clone().normalize(); s.set(0, 0, 0); map.get(keys[i]).forEach(f => { if (f.clone().normalize().dot(own) > cosT) s.add(f); }); if (s.lengthSq() < 1e-20) s.copy(own); s.normalize(); out[i * 3] = s.x; out[i * 3 + 1] = s.y; out[i * 3 + 2] = s.z; }
+    g.setAttribute("normal", new THREE.BufferAttribute(out, 3)); return g; };
   // the seat leather and headliner of the existing parts pick up the same treatment
-  cabin(M.leather, 420, .0003, undefined, .45); M.leather.color.set(0x232226); M.leather.roughness = .52;
+  cabin(M.leather, 420, .0003, undefined, .62); M.leather.color.set(0x232226); M.leather.roughness = .44;
   const beam = (a, b, t, mat) => { const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.BoxGeometry(t, d.length(), t), mat);
     m.position.copy(a).add(b).multiplyScalar(.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m; };
   { // dashboard: the 2019 MG ZS EV's cabin as the driver sees it (rig space: x right, y up, driver faces -z, eyes at -.4, 1.27, .14)
@@ -1412,18 +1715,25 @@ function wrapLines(g, text, maxW) {
     put(soft(.25, .09, .48, .04, .035, M.leather), .02, .63, .3);
     // doors: soft upper trim along the sill, leather insert, armrest with a satin pull, hard lower panel with a speaker grille
     [-1, 1].forEach(s => {
-      sweep([V(s * .86, .965, -.86), V(s * .875, .985, -.3), V(s * .88, .99, .3), V(s * .875, .985, 1.25)], .045, .032, MI.soft, V(-s, 1, 0));
-      put(soft(.06, .16, 1.95, .03, .02, MI.soft), s * .89, .875, .2);
-      put(soft(.04, .2, 1.3, .03, .015, M.leather), s * .87, .69, .28);
-      put(soft(.1, .055, .72, .025, .022, MI.soft), s * .825, .78, .38);
-      put(soft(.022, .03, .13, .01, .008, MI.silver), s * .84, .87, -.06);
-      put(soft(.06, .42, 1.95, .03, .02, MI.hard), s * .9, .38, .2);
+      sweep([V(s * .86, .965, -.86), V(s * .875, .985, -.3), V(s * .88, .99, .3), V(s * .879, .99, 1.2), V(s * .872, .985, 2.44)], .045, .032, MI.soft, V(-s, 1, 0), 32);
+      // front and rear door cards: soft upper trim, a hard backing strip, leather insert, armrest, satin pull, hard lower panel
+      [[-.79, .72, -.36, .66, .0, .66, -.06], [.8, 1.74, .9, 1.64, .96, 1.5, 1.0]].forEach(([z0, z1, l0, l1, a0, a1, pz]) => { const c = (z0 + z1) / 2;
+        put(soft(.06, .16, z1 - z0, .03, .02, MI.soft), s * .89, .875, c);
+        put(soft(.05, .26, z1 - z0, .02, .01, MI.hard), s * .905, .69, c);
+        put(soft(.04, .2, l1 - l0, .03, .015, M.leather), s * .87, .69, (l0 + l1) / 2);
+        put(soft(.1, .055, a1 - a0, .025, .022, MI.soft), s * .825, .78, (a0 + a1) / 2);
+        put(soft(.022, .03, .13, .01, .008, MI.silver), s * .84, .87, pz);
+        put(soft(.06, .42, z1 - z0, .03, .02, MI.hard), s * .9, .38, c); });
+      put(soft(.075, .84, .12, .03, .02, MI.hard), s * .885, .58, .76); // B-pillar trim over the shut line
+      put(soft(.06, .83, .72, .03, .02, MI.hard), s * .9, .58, 2.08);  // rear quarter panel beside the bench
+      { const sp = put(new THREE.Mesh(new THREE.CircleGeometry(.06, 24), MI.vent), s * .866, .4, 1.27, 0, -s * Math.PI / 2);
+        put(new THREE.Mesh(new THREE.TorusGeometry(.063, .004, 6, 28), MI.silver), s * .865, .4, 1.27, 0, -s * Math.PI / 2); }
       const spk = put(new THREE.Mesh(new THREE.CircleGeometry(.075, 28), MI.vent), s * .865, .4, -.45, 0, -s * Math.PI / 2);
       put(new THREE.Mesh(new THREE.TorusGeometry(.078, .004, 6, 32), MI.silver), s * .864, .4, -.45, 0, -s * Math.PI / 2);
       // mirror sail in the corner of the side window, and the A-pillar trim (painted edge outside, fabric inside)
       sweep([V(s * .875, .935, -1.12), V(s * .835, 1.18, -.79), V(s * .78, 1.42, -.43), V(s * .758, 1.49, -.26)], .047, .02, MI.fabric, V(s, .3, -.7));
       rig.add(tube([V(s * .885, .93, -1.14), V(s * .845, 1.18, -.8), V(s * .79, 1.43, -.44), V(s * .768, 1.5, -.26)], .022, M.paint));
-      sweep([V(s * .758, 1.49, -.26), V(s * .76, 1.5, .45), V(s * .762, 1.48, 1.3)], .04, .02, MI.fabric, V(s, 1, 0));
+      sweep([V(s * .758, 1.49, -.26), V(s * .76, 1.5, .45), V(s * .762, 1.48, 1.3), V(s * .745, 1.46, 1.8), V(s * .65, 1.412, 2.15)], .04, .02, MI.fabric, V(s, 1, 0), 32);
       sweep([V(s * .85, .97, .74), V(s * .8, 1.24, .7), V(s * .755, 1.47, .66)], .055, .03, MI.fabric, V(s, 0, 0));
       // side mirror: a rounded housing on a short stalk
       const sm = new THREE.Group(); sm.position.set(s * 1.03, 1.03, -.68);
@@ -1436,9 +1746,10 @@ function wrapLines(g, text, maxW) {
     });
     // windscreen header and a curved headliner
     sweep([V(-.758, 1.49, -.27), V(0, 1.515, -.3), V(.758, 1.49, -.27)], .045, .022, MI.fabric, V(0, .5, -1));
-    { const hl = new THREE.PlaneGeometry(1.5, 1.72, 18, 10); hl.rotateX(Math.PI / 2);
-      const pa = hl.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) / .75, z = pa.getZ(i) / .86; pa.setY(i, -.05 * x * x - .015 * z * z); }
-      hl.computeVertexNormals(); const m = new THREE.Mesh(hl, MI.fabric); m.position.set(0, 1.53, .5); rig.add(m);
+    { const hl = new THREE.PlaneGeometry(1.5, 2.52, 18, 22); hl.rotateX(Math.PI / 2);
+      const pa = hl.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) / .75, wz = pa.getZ(i) + .9, k = sstep(1.5, 2.15, wz);
+        pa.setY(i, -.05 * x * x - .012 * ((wz - .45) / .85) ** 2 - .05 * k); pa.setX(i, pa.getX(i) * (1 - .12 * k)); }
+      hl.computeVertexNormals(); const m = new THREE.Mesh(hl, MI.fabric); m.position.set(0, 1.53, .9); rig.add(m);
       const lamp = soft(.24, .02, .1, .03, .009, MI.hard, V(0, 1.52, -.12)); rig.add(lamp); }
     // windshield
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.62, .94), M.glass); ws.position.set(0, 1.21, -.71); ws.rotation.x = .97; rig.add(ws);
@@ -1458,18 +1769,58 @@ function wrapLines(g, text, maxW) {
     [-.38, .22].forEach(x => { const w = rbox(.6, .012, .02, M.dash, V(x, .98, -1.18)); w.rotation.y = .12; rig.add(w); });
     // passenger seat
     const seat = new THREE.Group(); seat.position.set(.45, 0, .14); rig.add(seat);
-    // soft panels: rounded outlines with deep bevels, plus side bolsters angled in
-    const rr2 = (w, h, r) => { const sh = new THREE.Shape(), x = w / 2, y = h / 2; sh.moveTo(-x + r, -y); sh.lineTo(x - r, -y); sh.quadraticCurveTo(x, -y, x, -y + r); sh.lineTo(x, y - r); sh.quadraticCurveTo(x, y, x - r, y);
-      sh.lineTo(-x + r, y); sh.quadraticCurveTo(-x, y, -x, y - r); sh.lineTo(-x, -y + r); sh.quadraticCurveTo(-x, -y, -x + r, -y); return sh; };
-    const pad = (w, h, d, r, b, pos, rx = 0, ry = 0) => { const g = new THREE.ExtrudeGeometry(rr2(w - 2 * b, h - 2 * b, r), { depth: d - 2 * b, bevelEnabled: true, bevelThickness: b, bevelSize: b, bevelSegments: 5, curveSegments: 10 });
-      g.translate(0, 0, -(d - 2 * b) / 2); g.computeVertexNormals(); const m = new THREE.Mesh(g, M.leather); m.position.copy(pos); m.rotation.set(rx, ry, 0, "YXZ"); seat.add(m); return m; };
-    pad(.36, .12, .56, .05, .045, V(0, .5, -.12), -Math.PI / 2 + .04);
-    [-1, 1].forEach(s => pad(.1, .15, .55, .04, .045, V(s * .22, .54, -.12), -Math.PI / 2 + .04, s * .06));
-    pad(.38, .72, .1, .08, .04, V(0, .95, .2), .16);
-    [-1, 1].forEach(s => pad(.11, .66, .17, .05, .05, V(s * .225, .93, .18), .16, -s * .32));
-    pad(.27, .17, .1, .07, .04, V(0, 1.45, .31), .1);
-    [-.07, .07].forEach(x => seat.add(limb(V(x, 1.3, .3), V(x, 1.4, .31), .007, .007, M.chrome)));
-    for (let k = 0; k < 4; k++) seat.add(rbox(.34, .005, .005, M.stitch, V(0, .7 + k * .14, .145 + k * .023)));
+    // each seat is two solid bolstered pieces (cushion and back, one extrusion each, smooth-shaded) with a perforated
+    // insert and seam grooves, a headrest on satin posts and a hard plastic base down to the floor
+    const shp = cmds => { const sh = new THREE.Shape(); cmds.forEach((c, i) => i === 0 ? sh.moveTo(c[0], c[1]) : c.length === 2 ? sh.lineTo(c[0], c[1]) : sh.quadraticCurveTo(c[2], c[3], c[0], c[1])); return sh; };
+    const CUSH = [[-.24, -.05], [.24, -.05], [.27, 0, .27, -.05], [.265, .07], [.225, .095, .262, .098], [.15, .04, .17, .05], [-.15, .04], [-.225, .095, -.17, .05], [-.265, .07, -.262, .098], [-.27, 0], [-.24, -.05, -.27, -.05]];
+    const BACK = [[-.24, -.05], [.24, -.05], [.275, .02, .275, -.05], [.262, .1], [.215, .122, .255, .128], [.15, .045, .165, .115], [-.15, .045], [-.215, .122, -.165, .115], [-.262, .1, -.255, .128], [-.275, .02], [-.24, -.05, -.275, -.05]];
+    const groove = (par, w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), MI.seam); m.position.set(x, y, z); par.add(m); };
+    // the driver's own seat is seen from a few centimetres away, so it gets the same leather without the fine grain
+    const LD = cabin(std(0x232226, .44), 0, 0, undefined, .62);
+    const upholster = (G, L = M.leather) => {
+      const cg = new THREE.ExtrudeGeometry(shp(CUSH), { depth: .39, bevelEnabled: true, bevelThickness: .035, bevelSize: .018, bevelSegments: 4, curveSegments: 6 }); cg.translate(0, 0, -.195);
+      const cu = new THREE.Mesh(smoothN(cg), L); cu.position.set(0, .5, -.08); cu.rotation.x = .07; G.add(cu);
+      const ci = soft(.25, .014, .38, .03, .005, MI.seatIn, V(0, .056, -.01)); ci.geometry = smoothN(ci.geometry); cu.add(ci);
+      [-.1, .02, .12].forEach(z => groove(cu, .245, .004, .004, 0, .064, z)); [-1, 1].forEach(s => groove(cu, .004, .004, .38, s * .127, .064, -.01));
+      const bg = new THREE.ExtrudeGeometry(shp(BACK), { depth: .64, bevelEnabled: true, bevelThickness: .04, bevelSize: .015, bevelSegments: 4, curveSegments: 6 }); bg.rotateX(-Math.PI / 2); bg.translate(0, .04, 0);
+      const bp = bg.attributes.position; for (let i = 0; i < bp.count; i++) { const t = clamp(bp.getY(i) / .72, 0, 1), f = -bp.getZ(i);
+        bp.setX(i, bp.getX(i) * (1 - .12 * t)); if (f > .06) bp.setZ(i, -(.06 + (f - .06) * (1 - .5 * t))); }
+      const bk = new THREE.Mesh(smoothN(bg), L); bk.position.set(0, .58, .21); bk.rotation.x = .16; G.add(bk);
+      const bi = soft(.24, .5, .016, .03, .006, MI.seatIn, V(0, .33, -.061)); bi.geometry = smoothN(bi.geometry); bk.add(bi);
+      [.16, .28, .4, .52].forEach(y => groove(bk, .235, .004, .004, 0, y, -.07)); [-1, 1].forEach(s => groove(bk, .004, .5, .004, s * .122, .33, -.07));
+      const hr = soft(.26, .17, .1, .07, .04, L, V(0, 1.45, .35)); hr.geometry = smoothN(hr.geometry); hr.rotation.x = .1; G.add(hr);
+      [-.07, .07].forEach(x => G.add(limb(V(x, 1.26, .325), V(x, 1.38, .34), .007, .007, MI.silver)));
+      G.add(soft(.44, .26, .46, .03, .02, MI.hard, V(0, .32, -.07)));
+    };
+    upholster(seat);
+    const dseat = new THREE.Group(); dseat.position.set(-.4, 0, .14); rig.add(dseat); upholster(dseat, LD);
+    // floor carpet and the footwell wall under the dash
+    { const fl = new THREE.PlaneGeometry(1.78, 3.52, 4, 8); fl.rotateX(-Math.PI / 2); const m = new THREE.Mesh(fl, MI.carpet); m.position.set(0, .2, .7); rig.add(m); }
+    put(soft(1.74, .34, .04, .02, .01, MI.hard), 0, .37, -1.06);
+    // rear bench: three cushions and three back sections side by side (they touch, so no light shows between them), headrests
+    [[-.79, -.255], [-.265, .265], [.255, .79]].forEach(([x0, x1]) => {
+      const c = runX([[1.2, .2], [1.2, .52], [1.27, .605, 1.2, .6], [1.52, .6], [1.76, .565, 1.66, .6], [1.78, .2]], x0, x1, M.leather, .03); c.geometry = smoothN(c.geometry);
+      const b = runX([[1.73, .55], [1.71, .78, 1.68, .64], [1.8, 1.06], [1.93, 1.06, 1.86, 1.15], [1.93, .55]], x0, x1, M.leather, .03); b.geometry = smoothN(b.geometry); });
+    [-.5, 0, .5].forEach(x => { const w = x ? .25 : .2, h = x ? .16 : .13, y = x ? 1.2 : 1.18;
+      const r = soft(w, h, .09, .06, .035, M.leather, V(x, y, 1.885)); r.geometry = smoothN(r.geometry); r.rotation.x = .14; rig.add(r);
+      [-1, 1].forEach(k => rig.add(limb(V(x + k * .06, 1.04, 1.86), V(x + k * .06, y - .04, 1.875), .006, .006, MI.silver))); });
+    // parcel shelf over the boot, and the tailgate's inner trim below the glass
+    put(soft(1.74, .025, .53, .02, .01, MI.carpet), 0, .995, 2.17);
+    put(soft(1.6, .8, .04, .02, .01, MI.hard), 0, .6, 2.47);
+    // C-pillars: a fabric-trimmed panel between the rear door glass and the tailgate glass, with seals along both edges
+    const quad = (a, b, c, d, inward) => { const n = b.clone().sub(a).cross(c.clone().sub(a)), P = n.dot(inward) > 0 ? [a, b, c, a, c, d] : [a, c, b, a, d, c];
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P.flatMap(v => [v.x, v.y, v.z]), 3)); g.computeVertexNormals(); return g; };
+    const glass = [];
+    [-1, 1].forEach(s => {
+      const A = V(s * .884, .985, 1.70), B = V(s * .768, 1.475, 1.58), C = V(s * .645, 1.414, 2.16), D = V(s * .775, .99, 2.44);
+      rig.add(new THREE.Mesh(quad(A, B, C, D, V(-s, 0, 0)), MI.fabric));
+      sweep([A, A.clone().lerp(B, .5), B], .022, .014, MI.hard, V(-s, 0, 0), 8); sweep([C, C.clone().lerp(D, .5), D], .022, .014, MI.hard, V(-s, 0, -.5), 8);
+      // rear door glass, just outside the trim
+      glass.push([quad(V(s * .9, .985, .76), V(s * .79, 1.47, .66), V(s * .79, 1.47, 1.62), V(s * .9, .985, 1.74), V(-s, 0, 0)), null, null]);
+    });
+    glass.push([quad(V(-.775, .99, 2.45), V(-.645, 1.414, 2.172), V(.645, 1.414, 2.172), V(.775, .99, 2.45), V(0, 0, -1)), null, null]);
+    { const g = mergeGeos(glass); g.deleteAttribute("color"); rig.add(new THREE.Mesh(g, MI.tint)); }
+    sweep([V(-.65, 1.412, 2.15), V(0, 1.44, 2.165), V(.65, 1.412, 2.15)], .035, .02, MI.fabric, V(0, -.3, 1), 16); // header over the tailgate
   }
   // steering wheel: the ZS's flat-bottomed three-spoke leather wheel, 37 cm across and about 80 cm from Quinn's eyes.
   // tick() still sets wheelGrp.position.y (.84 at rest) and spins wheelSpin; the hub sits a touch higher on its column
@@ -2091,7 +2442,7 @@ function wrapLines(g, text, maxW) {
     let slam = 0, zoom = 1;
     if (mu.on) {
       const rel = te < 2.2 ? -16 + 17 * sstep(0, 2.2, te) : te < 4.4 ? 1 + Math.sin(te * 1.3) * .25 : 1 + 12.5 * (te - 4.4) * (te - 4.4) + 2 * (te - 4.4);
-      const q = at(clamp((dist + rel) / L, 0, 1)); svr.visible = te < 8.5;
+      mu.d = dist + rel; const q = at(clamp((dist + rel) / L, 0, 1)); svr.visible = te < 8.5;
       svr.position.copy(q.pos).add(q.right.multiplyScalar(2.2)); svr.rotation.y = Math.atan2(-q.tan.x, -q.tan.z);
       svr.userData.wheels.forEach(w => { w.rotation.x -= 18 * dt / .41; });
       const look = sstep(2.2, 2.7, te) * (1 - sstep(4.1, 4.5, te));
@@ -2100,7 +2451,7 @@ function wrapLines(g, text, maxW) {
       svrGuy.smile.forEach(([m, i]) => { m.morphTargetInfluences[i] = look; });
       if (te > 1.5 && te < 4.6) { zoom = lerp(1, .62, sstep(1.5, 2.8, te) * (1 - sstep(4.1, 4.6, te))); }
       if (te > 5.0 && te < 5.9) { const f = te - 5.0, ph = (f % .45) / .45; slam = Math.sin(ph * Math.PI); if (ph > .9 && !mu["h" + Math.floor(f / .45)]) { mu["h" + Math.floor(f / .45)] = 1; honk(); } }
-    } else { mu.h0 = mu.h1 = 0; }
+    } else { mu.h0 = mu.h1 = 0; mu.d = null; }
     hands[1].position.set(lerp(.185, .03, sstep(4.8, 5.05, te) * (1 - sstep(5.9, 6.2, te))), .01 + slam * .1, .015 + slam * .12);
     const thud = mu.on && te > 5.0 && te < 6.0 ? Math.max(0, 1 - Math.abs(((te - 5.0) % .45) / .45 - 1) * 8) : 0;
     wheelGrp.position.y = .84 - thud * .012;
@@ -2160,15 +2511,23 @@ function wrapLines(g, text, maxW) {
     dinerGlow.forEach(m => { m.emissiveIntensity = .3 + .7 * night; }); poolMat.opacity = sstep(.3, .75, night) * .5; poolMat.userData.mesh.visible = poolMat.opacity > .002;
     envHolders.forEach(m => { m.envMapIntensity = (m.userData.envI || 1) * (1 - night * .8); });
 
-    // traffic (same-direction cars share the SVR's lane, so they are moved well clear while it passes)
+    // traffic: real-time car-following (see trafficStep); the SVR is followed, never driven through
+    if (mu.on) clearSvrLane(dist); else mu.cl = false;
+    const svrD = mu.on && svr.visible && mu.d != null ? mu.d : null, svrV = svrD != null && mu.pd != null ? (svrD - mu.pd) / Math.max(dt, 1e-3) : vel; mu.pd = svrD;
+    trafficStep(dt, dist, vel, laneOff, svrD, svrV);
+    tFr.setFromProjectionMatrix(tPM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); tSeen.fill(0);
     traffic.forEach((c, i) => {
-      c.d = c.same ? c.d + c.v * dt : c.d - c.v * dt; const max = L * ROAD_END - 20;
-      if (c.d < 0) c.d += max; if (c.d > max) c.d -= max;
-      if (c.same && Math.abs(c.d - dist) < 8) c.d += 16;
-      const q = at(c.d / L); c.c.position.copy(q.pos).add(q.right.multiplyScalar(c.lane)); c.c.rotation.y = Math.atan2(-q.tan.x, -q.tan.z) + (c.same ? 0 : Math.PI);
-      const f = c.c.position.clone().add(q.tan.clone().multiplyScalar(c.same ? -2.3 : 2.3));
+      const q = atX(c.d); c.c.position.copy(q.pos).add(q.right.multiplyScalar(c.x));
+      const lat = (c.x - c.px) / Math.max(dt, 1e-3); c.px = c.x;
+      const yawT = Math.atan2(-q.tan.x, -q.tan.z) + (c.dir < 0 ? Math.PI : 0) - c.dir * Math.atan(lat / Math.max(c.v, 3));
+      if (c.snap) { c.yaw = yawT; c.snap = false; } else { let dy = yawT - c.yaw; dy -= Math.round(dy / (2 * Math.PI)) * 2 * Math.PI; c.yaw += dy * (1 - Math.exp(-dt * 10)); }
+      c.c.rotation.y = c.yaw;
+      c.spin = (c.spin - c.v * dt / c.st.r) % (2 * Math.PI); c.c.updateMatrix(); wRot.makeRotationX(c.spin);
+      c.woff.forEach((m, k) => { wheelIM.setMatrixAt(c.ws + k, wM.multiplyMatrices(c.c.matrix, m).multiply(wRot)); }); bodyIM[c.k].setMatrixAt(c.slot, c.c.matrix);
+      tSph.center.copy(c.c.position); if (tFr.intersectsSphere(tSph)) tSeen[c.k] = 1;
+      const f = c.c.position.clone().add(q.tan.clone().multiplyScalar(c.dir > 0 ? -2.3 : 2.3));
       tlPos.set([f.x - .7 * q.tan.z, .75, f.z + .7 * q.tan.x, f.x + .7 * q.tan.z, .75, f.z - .7 * q.tan.x], i * 6);
-    }); tlGeo.attributes.position.needsUpdate = true;
+    }); tlGeo.attributes.position.needsUpdate = true; bodyIM.forEach((m, k) => { m.instanceMatrix.needsUpdate = true; m.visible = !!tSeen[k]; }); wheelIM.instanceMatrix.needsUpdate = true; wheelIM.visible = tSeen.some(Boolean);
     tlMat.color.set(0xfff1d0);
 
     tokens.forEach(k => { k.m.visible = prog < k.p; k.m.rotation.y = t * 2; k.m.position.y = 1.6 + Math.sin(t * 3 + k.p * 50) * .2; });
