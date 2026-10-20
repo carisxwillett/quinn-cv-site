@@ -390,7 +390,7 @@ function wrapLines(g, text, maxW) {
 
   /* ------------------------------ renderer ------------------------------ */
   const canvas = document.getElementById("scene");
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
   // resolution starts modest and adapts to the frame rate (see adaptResolution)
   const PR_MAX = Math.min(devicePixelRatio || 1, 1.5); let pr = Math.min(PR_MAX, 1.25), ftAvg = 16, prT = 0, prLastDrop = -1e9;
   renderer.setPixelRatio(pr);
@@ -3017,20 +3017,7 @@ function wrapLines(g, text, maxW) {
     requestAnimationFrame(tick);
   }
   const tmpV = new THREE.Vector3(), cost = { js: 0, gl: 0 };
-  // two passes: the city on layer 0 with a 0.25 m-2.6 km depth range, then a fresh depth buffer for the car, its cabin,
-  // Quinn, Dani and the CV paper on layer 1 at 2 cm-12 m. The car always sits in front of the city, so nothing is lost.
-  let layered = false;
-  function drawScene() {
-    if (!layered) { layered = true;
-      car.traverse(o => { if (!o.isLight) o.layers.set(1); }); paper.layers.set(1);
-      scene.traverse(o => { if (o.isLight) o.layers.enableAll(); });
-      renderer.autoClear = false; renderer.info.autoReset = false; }
-    renderer.info.reset(); renderer.clear();
-    camera.layers.set(0); camera.near = .5; camera.far = 2200; camera.updateProjectionMatrix(); renderer.render(scene, camera);
-    renderer.clearDepth();
-    camera.layers.set(1); camera.near = .02; camera.far = 12; camera.updateProjectionMatrix(); renderer.render(scene, camera);
-    camera.layers.enableAll();
-  }
+  function drawScene() { renderer.render(scene, camera); }
   // drops the render resolution when frames run long and creeps it back up when there's headroom
   function adaptResolution(now, ms) {
     if (navigator.webdriver || document.hidden || ms > 250 || !cv.hidden) return;
