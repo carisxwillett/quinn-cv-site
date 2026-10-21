@@ -206,6 +206,37 @@ button.small{padding:5px 8px;font-size:12px}
   #hint{bottom:calc(200px + env(safe-area-inset-bottom,0px))}
   #banner{top:40%}
 }
+#enter{display:flex;flex-direction:column;align-items:center}
+#enter .in{margin:auto 0}
+#intro .name{font-size:clamp(40px,min(11vw,19vh),150px)}
+html.touch body{touch-action:pan-y}
+html.touch #hint .mouse{display:none}
+@media (max-height:520px) and (orientation:landscape){
+  #enter{padding:14px 16px}
+  #enter h1{font-size:clamp(34px,10vh,56px);margin:4px 0 2px}
+  #enter .role{font-size:18px}
+  #enter p{font-size:15px;line-height:1.35;margin-top:10px;max-width:40em}
+  #enter ul{font-size:14px;margin-top:10px;gap:3px;max-width:40em}
+  #enter .go{margin-top:12px}
+  #enter .go button{font-size:15px;padding:10px 18px}
+  #intro{top:21%}
+  #intro .name{font-size:clamp(34px,13vh,64px)}
+  #intro .role{font-size:clamp(16px,5.5vh,28px)}
+  #intro .tag{font-size:13px;margin-top:6px}
+  #mapwrap{width:96px;height:96px}
+  #place .where{font-size:20px}
+  #place .chap{font-size:11px}
+  #clock{font-size:20px}
+  #card{top:calc(64px + env(safe-area-inset-top,0px));width:min(340px,42%);max-height:calc(100% - 78px - env(safe-area-inset-top,0px));padding:10px 12px}
+  #card h2{font-size:22px}
+  #card .sub{font-size:15px}
+  #card p,.facts{font-size:14px}
+  #radio{top:calc(46px + env(safe-area-inset-top,0px))}
+  #controls{flex-direction:row}
+  #subs{bottom:calc(52px + env(safe-area-inset-bottom,0px));width:min(620px,calc(100% - 240px));font-size:16px}
+  #hint{bottom:calc(120px + env(safe-area-inset-bottom,0px));left:auto;right:max(16px,env(safe-area-inset-right,0px));transform:none}
+  #banner .t{font-size:clamp(32px,12vh,60px)}
+}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01s!important;animation:none!important}}
 </style>
 </head>
@@ -356,6 +387,9 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// a touch screen with no mouse: phones and tablets. They get swipe controls and their own resolution budget
+const touchUI = matchMedia("(pointer:coarse)").matches && !matchMedia("(any-pointer:fine)").matches;
+if (touchUI) document.documentElement.classList.add("touch");
 
 function canvasTex(w, h, draw) {
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -392,7 +426,8 @@ function wrapLines(g, text, maxW) {
   const canvas = document.getElementById("scene");
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
   // resolution starts modest and adapts to the frame rate (see adaptResolution)
-  const PR_MAX = Math.min(devicePixelRatio || 1, 1.25); let pr = Math.min(PR_MAX, 1), ftAvg = 16, prT = 0, prLastDrop = -1e9;
+  const prCap = () => touchUI ? Math.max(1, Math.min(devicePixelRatio || 1, 2, Math.sqrt(1.5e6 / (innerWidth * innerHeight)))) : Math.min(devicePixelRatio || 1, 1.25);
+  let PR_MAX = prCap(); const PR_MIN = touchUI ? 1 : .7; let pr = Math.min(PR_MAX, touchUI ? 1.5 : 1), ftAvg = 16, prT = 0, prLastDrop = -1e9;
   renderer.setPixelRatio(pr);
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   function photo(name, rx = 1, ry = 1, fallback = "#777777", wrap = THREE.MirroredRepeatWrapping) {
@@ -419,7 +454,8 @@ function wrapLines(g, text, maxW) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 8000);
   function resize() {
-    const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false);
+    const w = innerWidth, h = innerHeight; PR_MAX = prCap(); if (pr > PR_MAX) { pr = PR_MAX; renderer.setPixelRatio(pr); }
+    renderer.setSize(w, h, false);
     const aspect = w / h; camera.aspect = aspect;
     camera.fov = clamp(2 * Math.atan(Math.tan(37 * Math.PI / 180) / aspect) * 180 / Math.PI, 60, 100);
     camera.updateProjectionMatrix();
@@ -2694,7 +2730,9 @@ function wrapLines(g, text, maxW) {
   addEventListener("pointerdown", e => { if (e.target.closest("button,a,#card,#cv")) return; dragging = true; lastX = e.clientX; lastY = e.clientY; });
   addEventListener("pointermove", e => {
     hoverX = e.clientX / innerWidth - .5; hoverY = e.clientY / innerHeight - .5;
-    if (!dragging || e.pointerType === "touch") return; userYaw = clamp(userYaw - (e.clientX - lastX) * .005, -2.2, 2.2); userPitch = clamp(userPitch - (e.clientY - lastY) * .003, -.4, .4); lastX = e.clientX; lastY = e.clientY; });
+    if (!dragging) return;
+    if (e.pointerType === "touch") { userYaw = clamp(userYaw - (e.clientX - lastX) * .008, -2.2, 2.2); lastX = e.clientX; lastY = e.clientY; return; }
+    userYaw = clamp(userYaw - (e.clientX - lastX) * .005, -2.2, 2.2); userPitch = clamp(userPitch - (e.clientY - lastY) * .003, -.4, .4); lastX = e.clientX; lastY = e.clientY; });
   addEventListener("pointerup", () => dragging = false); addEventListener("pointercancel", () => dragging = false);
   addEventListener("keydown", e => { if (e.key === "r" || e.key === "R") lookHold = true; });
   addEventListener("keyup", e => { if (e.key === "r" || e.key === "R") lookHold = false; });
@@ -3211,7 +3249,7 @@ function wrapLines(g, text, maxW) {
     if (navigator.webdriver || document.hidden || ms > 250 || !cv.hidden) return;
     ftAvg = lerp(ftAvg, ms, .05); if (now - prT < 4000) return; prT = now;
     let np = pr;
-    if (ftAvg > 28 && pr > .7) { np = Math.max(.7, pr - .1); prLastDrop = now; }
+    if (ftAvg > 28 && pr > PR_MIN) { np = Math.max(PR_MIN, pr - .1); prLastDrop = now; }
     else if (ftAvg < 15 && pr < PR_MAX && now - prLastDrop > 20000) np = Math.min(PR_MAX, pr + .1);
     // draw straight after the resize, so the cleared canvas is never shown as a blank frame
     if (np !== pr) { pr = np; renderer.setPixelRatio(pr); resize(); drawScene(); }
@@ -3224,6 +3262,9 @@ function wrapLines(g, text, maxW) {
   { const en = $("enter"), leave = sound => { en.classList.add("off"); document.body.classList.remove("entering"); en.setAttribute("aria-hidden", "true"); introStart = performance.now();
       if (sound) { muted = false; soundOn(true); } else { muted = true; radio.sound(false); } setTimeout(() => en.remove(), 800); };
     $("enterName").textContent = isPh(CV.surname) ? CV.name : fullName(); $("enterRole").textContent = CV.title;
+    if (touchUI) { const li = document.querySelectorAll("#enter li");
+      li[0].innerHTML = "<b>Swipe up</b>to drive, and down to reverse. The car eases off while someone is talking"; li[1].innerHTML = "<b>Swipe sideways</b>to look around the car";
+      $("hint").lastElementChild.textContent = "Swipe up to drive"; }
     $("enterBtn").onclick = () => leave(true); $("enterQuiet").onclick = () => leave(false);
     $("enterCV").onclick = e => { e.preventDefault(); leave(false); openCV(); };
     $("enterBtn").focus({ preventScroll: true }); }
