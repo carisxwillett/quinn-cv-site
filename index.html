@@ -320,7 +320,7 @@ const CHAPTERS = [
 ];
 const LINES = [
   [.003, .018, "Windows down, music up. Go on then, show me your LA."],
-  [.018, .034, "Then Byte Burger. You left your CV on their counter last night, and the interview's tomorrow."],
+  [.018, .034, "One road, a few stops, then burgers. Your CV, my commentary."],
   [.085, .113, "Downtown. This is where your career got serious."],
   [.18, .212, "Sunset Strip. Every billboard here is about you. I didn't pay for them. Probably."],
   [.3, .334, "\"It's always DNS.\" You run the DNS, so it's never DNS. Allegedly."],
@@ -1585,7 +1585,8 @@ function wrapLines(g, text, maxW) {
         const badge = new THREE.Mesh(new THREE.CircleGeometry(.024, 16), new THREE.MeshBasicMaterial({ color: 0xffd23f })); badge.position.set(0, .048, .093); badge.rotation.x = -.62;
         cap.add(crown, peak, badge); const top = ch.root.getWorldPosition(new THREE.Vector3()).y + 1.833; cap.position.set(0, top - .074, .016); cap.updateMatrixWorld(true); B.Head.attach(cap); }
       ch.root.position.set(WM, 0, FZ - .86); g.add(ch.root);
-      worker.ch = ch; worker.hand = B.RightHand;
+      worker.ch = ch; worker.hand = B.RightHand; worker.mouth = [];
+      ch.root.traverse(o => { if (o.morphTargetDictionary && "mouthOpen" in o.morphTargetDictionary) worker.mouth.push([o, o.morphTargetDictionary.mouthOpen]); });
     }
     // canopy over the lane, held up by two chrome posts on the island
     const CX0 = -5.4, CX1 = 3.9, CZ1 = FZ + 5.3, CY = 3.95;
@@ -2183,8 +2184,41 @@ function wrapLines(g, text, maxW) {
       const face = new THREE.Mesh(fg, MI.rearGlass); face.position.z = .0005; mir.add(face); }
     const fresh = new THREE.Group(); fresh.position.set(.06, 1.342, -.42); rig.add(fresh); car.userData.fresh = fresh;
     fresh.add(beam(V(0, 0, 0), V(0, -.09, 0), .002, M.stitch));
-    const ftex = canvasTex(128, 192, (g) => { g.fillStyle = "#3d8b3d"; g.beginPath(); for (let k = 0; k < 7; k++) { const a = -Math.PI / 2 + (k - 3) * .45; g.ellipse(64 + Math.cos(a) * 30, 60 + Math.sin(a) * 30 + 10, 34, 10, a, 0, Math.PI * 2); } g.fill(); g.fillStyle = "#7a5a3a"; g.fillRect(58, 70, 12, 110); g.fillStyle = "#ffd23f"; g.font = "700 26px 'Barlow Condensed'"; g.textAlign = "center"; g.fillText("LA", 64, 140); });
-    const fm = new THREE.Mesh(new THREE.PlaneGeometry(.065, .1), new THREE.MeshBasicMaterial({ map: ftex, transparent: true, side: THREE.DoubleSide })); fm.position.y = -.14; fresh.add(fm);
+    // a die-cut card freshener: a tall LA fan palm (Washingtonia) leaning a little, its crown of drooping fronds over a dry
+    // skirt, on a sunset disc, with LOS ANGELES on the base. Drawn twice: fat and white for the card's border, then in colour.
+    const ftex = canvasTex(256, 384, (g) => {
+      const TX = 120, TY = 108, frond = (a, len, droop, white) => {
+        const ex = TX + Math.cos(a) * len, ey = TY + Math.sin(a) * len * .7 + droop, cx = TX + Math.cos(a) * len * .5, cy = TY + Math.sin(a) * len * .5 - 14;
+        g.lineCap = "round"; g.strokeStyle = white ? "#fbf7ee" : "#1d5e2f"; g.lineWidth = white ? 15 : 3;
+        g.beginPath(); g.moveTo(TX, TY); g.quadraticCurveTo(cx, cy, ex, ey); g.stroke();
+        for (let i = 1; i <= 14; i++) { const t = i / 15, u = 1 - t, x = u * u * TX + 2 * u * t * cx + t * t * ex, y = u * u * TY + 2 * u * t * cy + t * t * ey;
+          const dx = 2 * u * (cx - TX) + 2 * t * (ex - cx), dy = 2 * u * (cy - TY) + 2 * t * (ey - cy), n = Math.hypot(dx, dy), l = (white ? 22 : 17) * Math.sin(t * Math.PI * .9 + .2);
+          for (const sd of [-1, 1]) { g.strokeStyle = white ? "#fbf7ee" : (i + (sd > 0 ? 1 : 0)) % 2 ? "#2f8a3e" : "#246f33"; g.lineWidth = white ? 9 : 2.4;
+            g.beginPath(); g.moveTo(x, y); g.lineTo(x + (-dy / n * sd * .8 + dx / n * .35) * l, y + (dx / n * sd * .8 + dy / n * .35) * l + l * .55); g.stroke(); } }
+      };
+      const trunk = white => { g.lineCap = "round";
+        for (let y = TY; y < 330; y += 2) { const k = (y - TY) / (330 - TY), x = TX + Math.sin(k * 1.4) * 14 * k + 4 * k, w = 7 + k * 6;
+          g.fillStyle = white ? "#fbf7ee" : (y % 10 < 2 ? "#5e4126" : "#8a6440"); g.fillRect(x - w / 2 - (white ? 6 : 0), y, w + (white ? 12 : 0), 2.4); } };
+      const skirt = white => { g.fillStyle = white ? "#fbf7ee" : "#a8814e"; g.beginPath(); g.ellipse(TX + 1, TY + 16, white ? 19 : 13, white ? 24 : 18, 0, 0, Math.PI * 2); g.fill();
+        if (!white) { g.strokeStyle = "#7d5a32"; g.lineWidth = 1.5; for (let i = -10; i <= 10; i += 4) { g.beginPath(); g.moveTo(TX + i * .6, TY + 2); g.lineTo(TX + i, TY + 32); g.stroke(); } } };
+      const ANG = [-3.0, -2.6, -2.25, -1.95, -1.7, -1.45, -1.2, -.9, -.55, -.15, .25, -3.4];
+      // the card: border first
+      g.fillStyle = "#fbf7ee"; g.beginPath(); g.arc(TX + 6, 120, 82, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.roundRect ? g.roundRect(52, 312, 152, 62, 12) : g.rect(52, 312, 152, 62); g.fill();
+      trunk(true); skirt(true); ANG.forEach((a, i) => frond(a, 84 + (i % 3) * 8, 24 + Math.abs(Math.cos(a)) * 34, true));
+      g.beginPath(); g.arc(TX + 6, 22, 12, 0, Math.PI * 2); g.fill();
+      // colour: sunset disc, base plate, then the palm
+      const sun = g.createLinearGradient(0, 44, 0, 196); sun.addColorStop(0, "#ff5d8f"); sun.addColorStop(.55, "#ff9a3d"); sun.addColorStop(1, "#ffd23f");
+      g.fillStyle = sun; g.beginPath(); g.arc(TX + 6, 120, 74, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "rgba(255,240,200,.35)"; for (let y = 150; y < 196; y += 10) g.fillRect(TX - 70, y, 152, 3);
+      g.fillStyle = "#1b1426"; g.beginPath(); g.roundRect ? g.roundRect(58, 318, 140, 50, 9) : g.rect(58, 318, 140, 50); g.fill();
+      g.fillStyle = "#ffd23f"; g.font = "30px Anton, Impact, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("LOS ANGELES", 128, 344, 124);
+      trunk(false); ANG.slice(0, 6).forEach((a, i) => frond(a, 84 + (i % 3) * 8, 24 + Math.abs(Math.cos(a)) * 34, false)); skirt(false);
+      ANG.slice(6).forEach((a, i) => frond(a, 84 + (i % 3) * 8, 24 + Math.abs(Math.cos(a)) * 34, false));
+      // the hole for the string
+      g.globalCompositeOperation = "destination-out"; g.fillStyle = "#000"; g.beginPath(); g.arc(TX + 6, 22, 5, 0, Math.PI * 2); g.fill(); g.globalCompositeOperation = "source-over";
+    });
+    const fm = new THREE.Mesh(new THREE.PlaneGeometry(.07, .105), new THREE.MeshBasicMaterial({ map: ftex, transparent: true, alphaTest: .05, side: THREE.DoubleSide })); fm.position.y = -.14; fresh.add(fm);
     // hood and wings: one painted skin 2 m across. The bonnet's rear edge sits just ahead of the windscreen; outboard of the
     // shut lines the wings carry on back to the A-pillar feet, then roll down over the sides, so no road shows past the dash
     const HZ = -1.22, hoodY = (x, z) => { const X = Math.abs(x), zz = clamp((HZ - z) / 1.4, 0, 1);
@@ -2623,7 +2657,7 @@ function wrapLines(g, text, maxW) {
       <h3>Education</h3><p>${ph(CV.education)}</p>
       <h3>Contact</h3><ul>${CV.contact.map(c => `<li><b>${esc(c.what)}:</b> ${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${ph(c.value)}</a>` : ph(c.value)}</li>`).join("")}</ul></div>`;
     cv.classList.toggle("zoom", zoom === true); cvOpenedAt = performance.now(); cv.scrollTop = 0;
-    cv.hidden = false; $("cvClose").focus({ preventScroll: true }); $("cvClose").onclick = closeCV; radio.hold(true);
+    cv.hidden = false; $("cvClose").focus({ preventScroll: true }); $("cvClose").onclick = closeCV;
   }
   function closeCV() {
     cv.hidden = true; $("cvBtn").focus({ preventScroll: true }); radio.hold(false);
@@ -2638,7 +2672,9 @@ function wrapLines(g, text, maxW) {
     if (fading) return; fading = true; const f = $("fade"); f.classList.add("on");
     setTimeout(() => { fn(); setTimeout(() => { f.classList.remove("on"); fading = false; }, 140); }, reduceMotion ? 30 : hold);
   }
+  let hushSpent = false;
   function restart() {
+    hushSpent = true;
     fadeThen(() => {
       scrollTo(0, 0); prog = INTRO_P; vel = 0; smoothSpeed = 0; steer = 0; yaw = 0; pitch = 0; userYaw = 0; userPitch = 0;
       introStart = performance.now(); $("intro").classList.remove("off"); heard.clear(); heldLine = null;
@@ -2763,7 +2799,7 @@ function wrapLines(g, text, maxW) {
       } };
     return A;
   }
-  function resetOrder() { order.on = false; order.done = false; order.fly = null; order.opened = false; paper.visible = false; worker.reach(0); }
+  function resetOrder() { order.on = false; order.done = false; order.fly = null; order.opened = false; order.pp = null; paper.visible = false; paper.scale.setScalar(1); worker.reach(0); if (worker.mouth) worker.mouth.forEach(([m, i]) => m.morphTargetInfluences[i] = 0); }
   function setSoundBtn() { const b = $("soundBtn"); b.textContent = "Sound: " + (audio && audio.on ? "on" : "off"); b.setAttribute("aria-pressed", !!(audio && audio.on)); }
   function soundOn(on) {
     try {
@@ -3072,8 +3108,8 @@ function wrapLines(g, text, maxW) {
 
     // friend
     const muLine = rkt.on ? RK_LINES.find(l => tr >= l[0] && tr < l[1]) : mu.on ? MU_LINES.find(l => te >= l[0] && te < l[1]) : order.on ? ORDER_LINES.find(l => to >= l[0] && to < l[1]) : null;
-    const introE = (now - introStart) / 1000, opening = prog < INTRO_P + .004 && !document.body.classList.contains("entering") ? (introE > 1 && introE < 6.4 ? LINES[0] : introE > 6.7 && introE < 12.3 ? LINES[1] : null) : null;
-    const line = muLine ? [0, 0, muLine[3], muLine[2]] : rkt.on || order.on || order.done ? null : opening || driveLine(prog, now);
+    const introE = (now - introStart) / 1000, inOpening = prog < INTRO_P + .004 && introE < 12.3, opening = prog < INTRO_P + .004 && !document.body.classList.contains("entering") ? (introE > 1 && introE < 6.4 ? LINES[0] : introE > 6.7 && introE < 12.3 ? LINES[1] : null) : null;
+    const line = muLine ? [0, 0, muLine[3], muLine[2]] : rkt.on || order.on || order.done ? null : inOpening ? (opening && (heard.add(opening[2]), opening)) : driveLine(prog, now);
     voice.say(line ? line[2] : "");
     const friendTalks = line && line[3] !== "Quinn" && line[3] !== "worker";
     const looking = yaw < -.8;
@@ -3083,17 +3119,25 @@ function wrapLines(g, text, maxW) {
     dani.t.value = t; dani.talk = !!friendTalks; dani.wind.value = .2 + Math.min(1, smoothSpeed / 22) * .8;
 
     if (order.on) { const tw = to - ORDER_SHIFT;
-      if (worker.ch) { worker.ch.turn(Math.sin(t * .8) * .05, .22); worker.reach(sstep(6.7, 7.5, tw) * (1 - sstep(8.4, 8.9, tw))); }
-      if (tw > 6.5 && worker.hand) {
+      const wTalk = line && line[3] === "worker" && voice.talking();
+      if (worker.mouth) { const mo = wTalk ? .12 + .55 * Math.abs(Math.sin(t * 10.5)) * (.55 + .45 * Math.sin(t * 3.7)) : 0;
+        worker.mouth.forEach(([m, i]) => m.morphTargetInfluences[i] = lerp(m.morphTargetInfluences[i], mo, 1 - Math.exp(-dt * 18))); }
+      if (worker.ch) { worker.ch.turn(Math.sin(t * .8) * .05 + (wTalk ? Math.sin(t * 2.6) * .04 : 0), .22); worker.reach(sstep(5.6, 7.0, tw) * (1 - sstep(8.2, 9.0, tw))); }
+      if (tw > 3.9 && worker.hand) {
         paper.visible = true;
-        if (tw < 8.1) { worker.hand.getWorldPosition(paper.position); paper.position.add(FW.clone().multiplyScalar(-.05)).add(RT.clone().multiplyScalar(.12)); paper.lookAt(camera.getWorldPosition(tmpV)); }
-        else {
+        if (tw < 7.9) {
+          // in his hand, smoothed so it doesn't jitter with the arm, always facing you
+          worker.hand.getWorldPosition(tmpV).add(FW.clone().multiplyScalar(-.05)).add(RT.clone().multiplyScalar(.12));
+          if (!order.pp) order.pp = tmpV.clone(); else order.pp.lerp(tmpV, 1 - Math.exp(-dt * 10));
+          paper.position.copy(order.pp); paper.lookAt(camera.getWorldPosition(new THREE.Vector3()));
+          paper.scale.setScalar(sstep(3.9, 4.4, tw));
+        } else {
           if (!order.fly) order.fly = { p: paper.position.clone(), q: paper.quaternion.clone() };
-          const k = sstep(8.1, 9.0, tw), tgt = camera.localToWorld(new THREE.Vector3(0, -.01, -.3)), cq = camera.getWorldQuaternion(new THREE.Quaternion());
-          paper.position.copy(order.fly.p).lerp(tgt, k); paper.position.y += Math.sin(k * Math.PI) * .12; paper.quaternion.copy(order.fly.q).slerp(cq, k);
+          const k = sstep(7.9, 9.3, tw), tgt = camera.localToWorld(new THREE.Vector3(0, -.005, -.27)), cq = camera.getWorldQuaternion(new THREE.Quaternion());
+          paper.position.copy(order.fly.p).lerp(tgt, k); paper.position.y += Math.sin(k * Math.PI) * .03; paper.quaternion.copy(order.fly.q).slerp(cq, Math.min(1, k * 1.25));
         }
       }
-      if (tw > 9.05 && !order.opened) { order.opened = true; order.on = false; order.done = true; paper.visible = false; openCV(true); }
+      if (tw > 9.5 && (!voice.talking() || tw > 11) && !order.opened) { order.opened = true; order.on = false; order.done = true; paper.visible = false; openCV(true); }
     }
 
     // sky + light
@@ -3151,7 +3195,7 @@ function wrapLines(g, text, maxW) {
     if (introT >= 1 && prog > INTRO_P + .01) $("intro").classList.add("off");
     const talk = voice.talking();
     if (audio && audio.on && frame % 2 === 0) audio.update(smoothSpeed, accelNow, (mu.on && te < 7.5) || rkt.on || order.on || talk);
-    radio.duck((mu.on && te < 7.5) || rkt.on || order.on || talk, prog < INTRO_P + .004 && !document.body.classList.contains("entering") && (now - introStart) / 1000 < 13);
+    radio.duck((mu.on && te < 7.5) || rkt.on || order.on || talk, !hushSpent && prog < INTRO_P + .004 && !document.body.classList.contains("entering") && (now - introStart) / 1000 < 13);
 
     // the full-screen CV covers the scene, so skip drawing while it is open
     const tk1 = performance.now();
