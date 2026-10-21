@@ -211,6 +211,19 @@ button.small{padding:5px 8px;font-size:12px}
 #intro .name{font-size:clamp(40px,min(11vw,19vh),150px)}
 html.touch body{touch-action:pan-y}
 html.touch #hint .mouse{display:none}
+@media (max-width:700px) and (orientation:portrait){
+  #card{padding:10px 13px 12px}
+  #card .k{font-size:11px}
+  #card h2{font-size:24px}
+  #card .sub{font-size:15px}
+  #card p{font-size:14px;line-height:1.3;margin-top:6px}
+  #card .facts{font-size:14px;margin-top:8px}
+  #card .bars{gap:6px;margin-top:8px}
+  #card.clip:not(.open){max-height:min(27vh,230px);overflow:hidden;cursor:pointer}
+  #card.clip:not(.open) p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  #card.clip:not(.open)::after{content:"Tap for more";position:absolute;left:0;right:0;bottom:0;padding:26px 13px 9px;font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--sun);background:linear-gradient(rgba(16,12,24,0),rgba(16,12,24,.96) 55%)}
+  #card.open{overflow:auto}
+}
 @media (max-height:520px) and (orientation:landscape){
   #enter{padding:14px 16px}
   #enter h1{font-size:clamp(34px,10vh,56px);margin:4px 0 2px}
@@ -2669,13 +2682,20 @@ function wrapLines(g, text, maxW) {
     const id = c ? c.id : null;
     if (id !== cardId) {
       cardId = id;
-      if (c) { card.innerHTML = c.html(); card.classList.add("on"); } else card.classList.remove("on");
+      card.classList.remove("open");
+      if (c) { card.innerHTML = c.html(); card.classList.add("on"); fitCard(); } else card.classList.remove("on");
     }
     if (id === "skills") { let best = -1, bd = 1; BILLBOARD_P.forEach((b, i) => { const dd = Math.abs(p - b); if (dd < bd && p < b + .02) { bd = dd; best = i; } }); card.querySelectorAll(".bar").forEach(el => el.classList.toggle("hot", +el.dataset.i === best)); }
     if (id === "certs") { let n = 0; card.querySelectorAll("#certList li").forEach((li, i) => { const got = p > CERT_P[i]; li.classList.toggle("todo", !got); n += got; }); $("certCount").textContent = n; }
   }
+  // a card taller than its compact size gets a "Tap for more" footer; a tap opens it, another closes it
+  function fitCard() { card.classList.remove("clip"); if (card.classList.contains("open")) return;
+    const full = card.scrollHeight; card.classList.add("clip"); if (card.clientHeight >= full - 2) card.classList.remove("clip"); }
+  addEventListener("resize", () => { if (cardId) fitCard(); });
   card.addEventListener("click", e => {
-    const b = e.target.closest("button"); if (!b) return;
+    const b = e.target.closest("button,a");
+    if (!b && (card.classList.contains("clip") || card.classList.contains("open"))) { card.classList.toggle("open"); fitCard(); if (!card.classList.contains("open")) card.scrollTop = 0; return; }
+    if (!b) return;
     if (b.dataset.copy != null) { const v = CV.contact[+b.dataset.copy].value; const done = () => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy", 1400); };
       try { navigator.clipboard.writeText(v).then(done, () => selectVal(b)); } catch (err) { selectVal(b); } }
     if (b.dataset.act === "cv") openCV();
