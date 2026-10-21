@@ -1336,13 +1336,13 @@ function wrapLines(g, text, maxW) {
     const white = nf(new THREE.MeshPhongMaterial({ color: 0xf1efe9, specular: 0x555555, shininess: 40, emissive: 0x3c3836 }));
     const black = nf(new THREE.MeshPhongMaterial({ color: 0x16171a, specular: 0x2a2a2a, shininess: 25 }));
     const R = 1.85, part = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; rocket.add(m); return m; };
-    // the side facing you (+z, the middle of each texture) carries HIRE QUINN up the first stage
+    // the side facing you (+z, the middle of each texture) carries QuinnX up the first stage
     const bodyTex = canvasTex(512, 1280, (g, w, h) => {
       g.fillStyle = "#f1efe9"; g.fillRect(0, 0, w, h); g.fillStyle = "rgba(0,0,0,.07)"; for (let y = 90; y < h; y += 190) g.fillRect(0, y, w, 3);
       const soot = g.createLinearGradient(0, h, 0, h * .55); soot.addColorStop(0, "rgba(40,34,30,.55)"); soot.addColorStop(1, "rgba(40,34,30,0)"); g.fillStyle = soot; g.fillRect(0, h * .55, w, h * .45);
       g.fillStyle = "rgba(0,0,0,.05)"; g.fillRect(w * .5 + 70, 0, 3, h);
       g.save(); g.translate(w / 2, h * .46); g.rotate(-Math.PI / 2); g.fillStyle = "#121316"; g.font = "bold 124px Anton, Impact, 'Arial Black', sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
-      g.fillText("HIRE  QUINN", 0, 0); g.restore();
+      g.fillText("QuinnX", 0, 0); g.restore();
     });
     part(new THREE.CylinderGeometry(R, R, 1.2, 48), black, .6);
     part(new THREE.CylinderGeometry(R, R, 28, 48, 1, false, Math.PI), nf(new THREE.MeshPhongMaterial({ map: bodyTex, specular: 0x555555, shininess: 40, emissive: 0x3c3836, emissiveMap: bodyTex })), 15.2);
@@ -3032,7 +3032,7 @@ function wrapLines(g, text, maxW) {
         sp.visible = h > 4; sp.position.set(sp.userData.j[0] * (1 + age), y + 2, sp.userData.j[1] * (1 + age)); sp.scale.set(sc, sc, 1); });
       rocketFx.userData.trail[0].material.opacity = .75 * fade;
       rocket.updateMatrixWorld(true); rocket.localToWorld(rkt.win.copy(RK_WIN));
-      // two steps: in until the whole rocket fills the screen (HIRE QUINN readable), then on up to the window
+      // two steps: in until the whole rocket fills the screen (QuinnX readable), then on up to the window
       rocket.localToWorld(rkt.mid.set(0, 24, 0));
       rkt.look = sstep(3.6, 4.6, tr) * (1 - sstep(10.6, 11.4, tr));
       rkt.k = sstep(4.6, 5.8, tr) * (1 - sstep(10.0, 10.7, tr));
