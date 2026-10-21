@@ -62,8 +62,8 @@ body{background:var(--ink);color:var(--paper);font-family:var(--hud);font-size:1
 #subs b{color:var(--sun);font-weight:700}
 
 /* chapter banner */
-#banner{top:30%;left:0;right:0;text-align:center;z-index:6;opacity:0;transition:opacity .5s,transform .5s;transform:scale(.96)}
-#banner.on{opacity:1;transform:none}
+#banner{top:30%;left:0;right:0;text-align:center;z-index:6;opacity:0;transition:opacity .5s}
+#banner.on{opacity:1}
 #banner .n{font-weight:700;letter-spacing:.3em;font-size:15px;color:var(--paper)}
 #banner .t{font-family:var(--display);font-size:clamp(40px,7vw,84px);color:var(--sun);line-height:1;text-transform:uppercase}
 #banner.passed .t{color:var(--sun)}
@@ -2831,7 +2831,7 @@ function wrapLines(g, text, maxW) {
   const voice = (() => {
     // [start, end] in seconds within the recording, in script order: Dani's ten drive lines, her three Range Rover lines,
     // Quinn's two lines and the worker's
-    const SEG = [[0, 3.78], [3.95, 11.05], [11.48, 14.73], [15.09, 20.77], [21.24, 27.5], [27.93, 32.13], [32.5, 35.93], [36.27, 40.43], [40.8, 45.98], [46.39, 50.5],
+    const SEG = [[0, 5.27], [5.71, 11.05], [11.48, 14.73], [15.09, 20.77], [21.24, 27.5], [27.93, 32.13], [32.5, 35.93], [36.27, 40.43], [40.8, 45.98], [46.39, 50.5],
       [50.93, 53.89], [54.25, 55.53], [55.95, 58.71], [59.18, 61.52], [62.21, 73.87], [74.29, 79.3], [79.89, 84.79], [85.13, 89.55], [89.76, 92.05]];
     const texts = [...LINES.map(l => l[2]), MU_LINES[0][3], MU_LINES[1][3], MU_LINES[3][3], MU_LINES[2][3], ORDER_LINES[0][3], ORDER_LINES[1][3], ...RK_LINES.map(l => l[3])];
     const at = new Map(texts.map((t, i) => [t, SEG[i]]));
@@ -3072,7 +3072,7 @@ function wrapLines(g, text, maxW) {
 
     // friend
     const muLine = rkt.on ? RK_LINES.find(l => tr >= l[0] && tr < l[1]) : mu.on ? MU_LINES.find(l => te >= l[0] && te < l[1]) : order.on ? ORDER_LINES.find(l => to >= l[0] && to < l[1]) : null;
-    const introE = (now - introStart) / 1000, opening = prog < INTRO_P + .004 && !document.body.classList.contains("entering") ? (introE > 1 && introE < 5 ? LINES[0] : introE > 5.4 && introE < 12.7 ? LINES[1] : null) : null;
+    const introE = (now - introStart) / 1000, opening = prog < INTRO_P + .004 && !document.body.classList.contains("entering") ? (introE > 1 && introE < 6.4 ? LINES[0] : introE > 6.7 && introE < 12.3 ? LINES[1] : null) : null;
     const line = muLine ? [0, 0, muLine[3], muLine[2]] : rkt.on || order.on || order.done ? null : opening || driveLine(prog, now);
     voice.say(line ? line[2] : "");
     const friendTalks = line && line[3] !== "Quinn" && line[3] !== "worker";
