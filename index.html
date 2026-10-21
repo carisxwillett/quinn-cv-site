@@ -21,7 +21,7 @@ body{margin:0}
 *,*::before,*::after{box-sizing:border-box}
 body{background:var(--ink);color:var(--paper);font-family:var(--hud);font-size:17px;overflow-x:hidden}
 #scene{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
-#road{height:1800vh;position:relative;z-index:-1}
+#road{height:2400vh;position:relative;z-index:-1}
 .hud{position:fixed;z-index:5;pointer-events:none}
 .stroke{text-shadow:0 1px 2px rgba(0,0,0,.85),0 2px 10px rgba(0,0,0,.55)}
 
@@ -219,9 +219,9 @@ button.small{padding:5px 8px;font-size:12px}
   <div class="kick">An interactive CV</div>
   <h1 id="enterName">Quinn Willett</h1>
   <div class="role" id="enterRole">Senior Systems Administrator</div>
-  <p>Ride along with Quinn through Los Angeles at sunset in his MG, with his friend Dani in the passenger seat. Each stretch of road is a chapter of his career, and the drive ends at a burger drive-thru where his full CV is handed over.</p>
+  <p>Quinn has a job interview tomorrow, and he left his CV on the counter at a burger drive-thru last night. Ride along in his MG as he crosses Los Angeles at sunset to get it back, with his friend Dani in the passenger seat. Each stretch of road is a chapter of his career.</p>
   <ul>
-    <li><b>Scroll</b>or swipe up to drive, and back to reverse</li>
+    <li><b>Scroll</b>or swipe up to drive, and back to reverse. The car eases off while someone is talking</li>
     <li><b>Drag</b>to look around the car</li>
     <li><b>Sound</b>engine noise and the radio, best with headphones</li>
   </ul>
@@ -320,20 +320,20 @@ const CHAPTERS = [
 ];
 const LINES = [
   [.003, .018, "Windows down, music up. Go on then, show me your LA."],
-  [.018, .034, "One road, a few stops, then burgers. Your CV, my commentary."],
+  [.018, .034, "Then Byte Burger. You left your CV on their counter last night, and the interview's tomorrow."],
   [.085, .113, "Downtown. This is where your career got serious."],
   [.18, .212, "Sunset Strip. Every billboard here is about you. I didn't pay for them. Probably."],
   [.3, .334, "\"It's always DNS.\" You run the DNS, so it's never DNS. Allegedly."],
   [.455, .492, "The 101. Every exit sign up here is a chapter of your career."],
   [.615, .655, "Third line escalation. When the team's stuck, they call you."],
-  [.735, .785, "PCH. Ocean's on my side, so I win."],
+  [.735, .785, "Pacific Coast Highway. You get the certificates, I get the ocean view."],
   [.865, .9, "Windows, Mac, ChromeOS, iOS, Android. You support the lot."],
   [.912, .95, "Byte Burger. Best fries in LA. Their Wi-Fi could use you."]
 ];
 /* the drive-thru: seconds after pulling up to the window */
 const ORDER_LINES = [
-  [.7, 10.9, "Quinn", "Can I get 2 number 9's, a number 9 large, a number 6 with extra dip, two number 45s, one with fries, and a large soda."],
-  [11.0, 13.1, "worker", "I can do you one better."]
+  [.7, 12.5, "Quinn", "Can I get two number 9's, a number 9 large, a number 6 with extra dip, a number 7, two number 45's, one with cheese, and a large soda."],
+  [12.7, 17.8, "worker", "Oh hey! I remember you! You left this here last night. Good luck with the interview!"]
 ];
 const BILLBOARD_P = [.205, .245, .285, .325, .365, .405];
 const JOB_STOP = [[.505, .52], [.585, .6], [.665, .68]];
@@ -378,7 +378,7 @@ function wrapLines(g, text, maxW) {
   const loadGLB = src => new Promise(res => { if (!THREE.GLTFLoader) return res(null); new THREE.GLTFLoader().load(src, res, undefined, () => res(null)); setTimeout(() => res(null), 30000); });
   const TEX_NAMES = ["asphalt", "paving", "grass", "sand", "facade_warm", "facade_grid", "facade_glass"];
   const armsP = loadGLB("models/interior_arms.json"); // Quinn's arms and hands for the driver's view
-  const assetsP = Promise.all([Promise.all(TEX_NAMES.map(n => loadImg("tex/" + n + ".jpg"))), Promise.all(["models/dani5.json", "models/driver.json", "models/driver.json"].map(loadGLB))]);
+  const assetsP = Promise.all([Promise.all(TEX_NAMES.map(n => loadImg("tex/" + n + ".jpg"))), Promise.all(["models/dani5.json", "models/driver.json", "models/driver.json", "models/driver.json"].map(loadGLB))]);
   try {
     await Promise.race([Promise.all([
       document.fonts.load("64px Anton"), document.fonts.load('700 40px "Barlow Condensed"'),
@@ -1328,6 +1328,82 @@ function wrapLines(g, text, maxW) {
     const el = .55, sp = c.clone().add(toRoad.clone().multiplyScalar(230 * Math.cos(el) * 0.98)).setY(110 * Math.sin(el) + 8); sp.y = hillH(sp.x, sp.z) + 8;
     sign.position.copy(sp); facing(sign, toRoad); sign.rotateX(-0.35); scene.add(sign); }
 
+  /* the HIRE QUINN rocket: a crewed two-stage launcher that lifts off in the distance just after the sign. Built at full size
+     (about 50 m tall) so the zoom right into its window holds up; the astronaut inside is the Ready Player Me sample again. */
+  const rocket = new THREE.Group(), rocketFx = new THREE.Group(); rocket.visible = rocketFx.visible = false; scene.add(rocket, rocketFx);
+  const rocketGuy = { wink: () => { }, smile: [] }, RK_WIN = new THREE.Vector3(0, 46.05, 1.5);
+  { const nf = m => { m.fog = false; return m; };
+    const white = nf(new THREE.MeshPhongMaterial({ color: 0xf1efe9, specular: 0x3a3a3a, shininess: 30 }));
+    const black = nf(new THREE.MeshPhongMaterial({ color: 0x16171a, specular: 0x2a2a2a, shininess: 25 }));
+    const R = 1.85, part = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; rocket.add(m); return m; };
+    // the side facing you (+z, the middle of each texture) carries HIRE QUINN up the first stage
+    const bodyTex = canvasTex(512, 1280, (g, w, h) => {
+      g.fillStyle = "#f1efe9"; g.fillRect(0, 0, w, h); g.fillStyle = "rgba(0,0,0,.07)"; for (let y = 90; y < h; y += 190) g.fillRect(0, y, w, 3);
+      g.fillStyle = "rgba(0,0,0,.05)"; g.fillRect(w * .5 + 70, 0, 3, h);
+      g.save(); g.translate(w / 2, h * .46); g.rotate(-Math.PI / 2); g.fillStyle = "#121316"; g.font = "118px Anton"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText("HIRE  QUINN", 0, 0); g.restore();
+    });
+    part(new THREE.CylinderGeometry(R, R, 1.2, 48), black, .6);
+    part(new THREE.CylinderGeometry(R, R, 28, 48, 1, false, Math.PI), nf(new THREE.MeshPhongMaterial({ map: bodyTex, specular: 0x3a3a3a, shininess: 30 })), 15.2);
+    part(new THREE.CylinderGeometry(R, R, 3.8, 48), black, 31.1);
+    part(new THREE.CylinderGeometry(R, R, 8, 48), white, 37);
+    part(new THREE.CylinderGeometry(R, R, 3, 48), white, 42.5);
+    part(new THREE.CylinderGeometry(R + .03, R + .03, .25, 48), black, 41);
+    // the capsule, with a round window cut out of its skin facing you
+    const capTex = canvasTex(512, 256, (g, w, h) => {
+      g.fillStyle = "#ecebe6"; g.fillRect(0, 0, w, h); g.fillStyle = "rgba(0,0,0,.06)"; for (let x = 0; x < w; x += 64) g.fillRect(x, 0, 2, h);
+      g.globalCompositeOperation = "destination-out"; g.fillStyle = "#000"; g.beginPath(); g.ellipse(w / 2, h / 2, 23, 26, 0, 0, Math.PI * 2); g.fill();
+    });
+    part(new THREE.CylinderGeometry(1.15, R, 4.2, 48, 1, false, Math.PI), nf(new THREE.MeshPhongMaterial({ map: capTex, alphaTest: .5, specular: 0x3a3a3a, shininess: 30 })), 46.1);
+    part(new THREE.CylinderGeometry(1.08, 1.76, 4.1, 32, 1, true), nf(new THREE.MeshLambertMaterial({ color: 0x2a2c31, side: THREE.BackSide, emissive: 0x15171b })), 46.1);
+    part(new THREE.CylinderGeometry(.18, 1.15, 2.4, 40), white, 49.4);
+    const tilt = Math.atan((R - 1.15) / 4.2);
+    const rim = part(new THREE.TorusGeometry(.44, .045, 10, 40), black, RK_WIN.y); rim.position.z = RK_WIN.z + .02; rim.rotation.x = -tilt;
+    const glass = part(new THREE.CircleGeometry(.43, 32), nf(new THREE.MeshPhongMaterial({ color: 0x9fb6d0, specular: 0xffffff, shininess: 120, transparent: true, opacity: .14, depthWrite: false })), RK_WIN.y);
+    glass.position.z = RK_WIN.z - .01; glass.rotation.x = -tilt;
+    // grid fins, folded legs and the engine cluster
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4, c = Math.cos(a), sn = Math.sin(a);
+      const fin = part(new THREE.BoxGeometry(1.1, .9, .08), black, 28.4); fin.position.x = sn * (R + .5); fin.position.z = c * (R + .5); fin.rotation.y = a;
+      const leg = part(new THREE.BoxGeometry(.5, 7.5, .35), black, 4.4); leg.position.x = sn * (R + .12); leg.position.z = c * (R + .12); leg.rotation.y = a; }
+    part(new THREE.CylinderGeometry(1.4, 1.6, 1, 24), black, -.5);
+    // flame: a white core and an orange plume, both glow sprites so they read against the dusk
+    const fl = (c, sx, sy, y) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+      sp.scale.set(sx, sy, 1); sp.position.y = y; rocket.add(sp); return sp; };
+    rocket.userData.flame = [fl(0xfff4dc, 5, 14, -6), fl(0xff9b3d, 11, 36, -15), fl(0xff6a20, 26, 26, -4)];
+    // smoke: a column from the pad up to the rocket, and a billowing cloud at the base
+    const puff = canvasTex(128, 128, (g, w) => { for (let i = 0; i < 26; i++) { const x = 64 + (Math.random() - .5) * 60, y = 64 + (Math.random() - .5) * 60, r = 18 + Math.random() * 26;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, "rgba(255,255,255,.35)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, w, w); } });
+    const smokeM = new THREE.SpriteMaterial({ map: puff, color: 0xe8d7c8, transparent: true, depthWrite: false, fog: false });
+    rocketFx.userData.cloud = Array.from({ length: 14 }, (_, i) => { const sp = new THREE.Sprite(smokeM); const a = i * 2.4; sp.userData.o = [Math.cos(a) * (8 + i * 2.5), 4 + (i % 4) * 5, Math.sin(a) * (8 + i * 2.5)]; rocketFx.add(sp); return sp; });
+    const colTex = canvasTex(64, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(.25, "rgba(255,255,255,.45)"); gr.addColorStop(1, "rgba(255,255,255,.7)"); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+    const colG = new THREE.CylinderGeometry(3.5, 22, 1, 20, 1, true); colG.translate(0, .5, 0);
+    rocketFx.userData.column = new THREE.Mesh(colG, new THREE.MeshBasicMaterial({ map: colTex, color: 0xdccbbc, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false })); rocketFx.add(rocketFx.userData.column);
+    if (GLB[3]) {
+      const ch = character(GLB[3]), B = ch.B;
+      // a white suit, no cap, lit by the cabin lights (emissive) so the face reads at any hour
+      ch.root.traverse(o => { if (!o.isMesh) return; if (/Headwear/.test(o.name)) o.visible = false;
+        [].concat(o.material).forEach(m => { m.fog = false; if (/Outfit/.test(o.name)) { m.map = null; m.color.set(0xeeeeea); }
+          if (m.emissive) { m.emissive.setRGB(.38, .35, .33); if (m.map && !m.emissiveMap) m.emissiveMap = m.map; } m.needsUpdate = true; }); });
+      for (const [sd, k] of [["Left", 1], ["Right", -1]]) {
+        rotW(B[sd + "Arm"], AX.z, k * -8); rotW(B[sd + "Arm"], AX.x, -52); rotW(B[sd + "ForeArm"], AX.y, k * 18); rotW(B[sd + "ForeArm"], AX.x, -38); }
+      const eye = B.RightEye || B.LeftEye, head = B.Head, ep = head.worldToLocal(eye.getWorldPosition(new THREE.Vector3()));
+      const lid = new THREE.Group(); lid.position.copy(ep); lid.visible = false; head.add(lid);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(.0175, 24, 16, 0, Math.PI * 2, 0, Math.PI * .5), new THREE.MeshLambertMaterial({ color: 0xe0a68c, emissive: 0x5a4034, fog: false })); cap.rotation.x = 1.35; lid.add(cap);
+      const lash = new THREE.Mesh(new THREE.TorusGeometry(.0166, .0022, 6, 20, Math.PI), new THREE.MeshBasicMaterial({ color: 0x24160f, fog: false })); lash.rotation.set(-.35, 0, Math.PI); lid.add(lash);
+      rocketGuy.wink = on => { lid.visible = on; eye.scale.y = on ? .12 : 1; };
+      ch.root.traverse(o => { if (o.morphTargetDictionary && "mouthSmile" in o.morphTargetDictionary) rocketGuy.smile.push([o, o.morphTargetDictionary.mouthSmile]); });
+      [B.LeftHand, B.RightHand].forEach(h => h && h.scale.setScalar(.001)); // his hands would poke through the capsule wall
+      const wrap = seat(ch, rocket, new THREE.Vector3(0, 45.2, .9)); wrap.rotation.y = 0;
+      // put his eyes just behind the window, then the helmet: a white shell behind his head and a neck ring
+      rocket.updateMatrixWorld(true); const hc = eye.getWorldPosition(new THREE.Vector3()); hc.x = 0;
+      wrap.position.add(new THREE.Vector3(0, RK_WIN.y + .1, RK_WIN.z - .36).sub(hc)); rocket.updateMatrixWorld(true);
+      const hp = head.getWorldPosition(new THREE.Vector3()); hp.y += .09;
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(.2, 28, 18, Math.PI, Math.PI), white); shell.position.copy(hp).add(new THREE.Vector3(0, 0, -.01)); rocket.add(shell);
+      const top = new THREE.Mesh(new THREE.SphereGeometry(.2, 28, 12, 0, Math.PI * 2, 0, Math.PI * .4), white); top.position.copy(hp); top.position.y -= .04; top.position.z -= .015; rocket.add(top);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.15, .035, 10, 32), white); ring.position.copy(hp).add(new THREE.Vector3(0, -.24, -.02)); ring.rotation.x = Math.PI / 2; rocket.add(ring);
+    }
+  }
+
   /* collectibles = certs */
   const tokens = CV.supports.map((cert, i) => {
     const a = at(CERT_P[i]), m = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), new THREE.MeshBasicMaterial({ color: [0xffb347, 0x79d27c, 0xff5d8f, 0x3fd0c9, 0xb061ff][i % 5] }));
@@ -1880,8 +1956,13 @@ function wrapLines(g, text, maxW) {
     mergeStatic(svr, new Set(svr.userData.wheels));
   }
 
-  const MU_LINES = [[.2, 3.1, "friend", "Is that... a Range Rover Sport SVR?"], [3.4, 4.8, "friend", "Did he just wink at you?"], [4.9, 7.9, "Quinn", "One day. ONE DAY."], [8.0, 10.7, "friend", "Easy. The MG didn't do anything."]];
+  const MU_LINES = [[.2, 3.1, "friend", "Is that... a Range Rover Sport SVR?"], [3.4, 4.8, "friend", "Did he just wink at you?"], [4.9, 7.9, "Quinn", "One day. ONE DAY."], [8.0, 10.9, "friend", "Easy. The Range Rover didn't do anything."]];
   const mu = { on: false, done: false, t0: 0 };
+  // the rocket moment, just past the sign: seconds since it began
+  const RK_P = .603, RK_END = 17.6, RK_AT = [720, -300], rkt = { on: false, done: false, t0: 0, k: 0, look: 0, win: new THREE.Vector3(), fovZ: 1 };
+  const RK_LINES = [[.2, 5.1, "friend", "Hey wait, look over there! Is that... your name on a rocket?"], [10.5, 14.9, "friend", "Wait... did he just wink at you as well? How did you see that far?"], [15.0, 17.3, "Quinn", "(laughs)"]];
+  // quick off the pad so it clears the freeway walls, slow while you're zoomed in, then gone
+  const rkAlt = x => x < .8 ? 0 : x < 4.4 ? 14 * (x - .8) ** 2 : 181 + 32 * (x - 4.4) + (x > 10.2 ? 30 * (x - 10.2) ** 2 : 0);
 
   /* ------------------------------ our car ------------------------------ */
   const car = new THREE.Group(); scene.add(car);
@@ -2552,8 +2633,8 @@ function wrapLines(g, text, maxW) {
   function restart() {
     fadeThen(() => {
       scrollTo(0, 0); prog = INTRO_P; vel = 0; smoothSpeed = 0; steer = 0; yaw = 0; pitch = 0; userYaw = 0; userPitch = 0;
-      introStart = performance.now(); $("intro").classList.remove("off");
-      mu.on = false; mu.done = false; mu.fix = null; svr.visible = false; resetOrder(); passed = false;
+      introStart = performance.now(); $("intro").classList.remove("off"); heard.clear(); heldLine = null;
+      mu.on = false; mu.done = false; mu.fix = null; svr.visible = false; rkt.on = false; rkt.done = false; rkt.fix = null; rocket.visible = rocketFx.visible = false; resetOrder(); passed = false;
       cv.hidden = true; radio.hold(false); card.classList.remove("on"); cardId = null; chapterIdx = -1;
     });
   }
@@ -2695,7 +2776,7 @@ function wrapLines(g, text, maxW) {
   const SONG = { id: "JWxoRY7AFSw", title: "Flower In A Hurricane", url: "https://www.youtube.com/watch?v=JWxoRY7AFSw" };
   const radio = (() => {
     const el = $("radio"), box = $("radioFrame"), st = $("radioStatus"), btn = $("radioToggle");
-    let frame = null, ready = false, playing = false, sndOn = false, held = false, vol = -1, failTimer = 0, nudgeTimer = 0;
+    let frame = null, ready = false, playing = false, sndOn = false, held = false, vol = -1, hushed = null, failTimer = 0, nudgeTimer = 0;
     const send = (func, args = []) => { if (frame && frame.contentWindow) frame.contentWindow.postMessage(JSON.stringify({ event: "command", func, args, id: 1, channel: "widget" }), "*"); };
     const beat = on => { if (audio) audio.beat = on; };
     const phone = () => matchMedia("(max-width:700px)").matches;
@@ -2721,7 +2802,7 @@ function wrapLines(g, text, maxW) {
       if (!frame || e.source !== frame.contentWindow) return;
       let d; try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch (err) { return; }
       if (!d || !d.event) return;
-      if (!ready && (d.event === "onReady" || d.event === "initialDelivery" || d.event === "infoDelivery")) { ready = true; clearTimeout(failTimer); vol = -1; if (sndOn && !held) send("playVideo"); else send("pauseVideo"); clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { if (frame && !playing && sndOn && !held) st.textContent = "Press ▶ on the player to start the song."; }, 2500); }
+      if (!ready && (d.event === "onReady" || d.event === "initialDelivery" || d.event === "infoDelivery")) { ready = true; clearTimeout(failTimer); vol = -1; hushed = null; if (sndOn && !held) send("playVideo"); else send("pauseVideo"); clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => { if (frame && !playing && sndOn && !held) st.textContent = "Press ▶ on the player to start the song."; }, 2500); }
       const ps = d.info && d.info.playerState;
       if (ps === 1) { playing = true; beat(false); st.textContent = ""; clearTimeout(nudgeTimer); }
       if (ps === 2 || ps === 0) { playing = false; }
@@ -2733,18 +2814,18 @@ function wrapLines(g, text, maxW) {
       // called when sound is switched on or off; the first time sound comes on, the song starts
       sound(on) { sndOn = on; el.hidden = false; if (on && !frame && !el.dataset.tried) { el.dataset.tried = 1; if (phone()) stop(); else play(); } else if (frame) send(on ? "playVideo" : "pauseVideo"); if (!on) playing = false; fit(); },
       hold(h) { held = h; if (frame && ready && sndOn) send(h ? "pauseVideo" : "playVideo"); },
-      duck(d) { const v = d ? 30 : 85; if (ready && v !== vol) { vol = v; send("setVolume", [v]); } }
+      duck(d, hush) { if (!ready) return; const v = d ? 30 : 85; if (v !== vol) { vol = v; send("setVolume", [v]); } if (hush !== hushed) { hushed = hush; send(hush ? "mute" : "unMute"); } }
     };
   })();
   const soundOnFn = on => soundOn(on);
   /* ------------------------------ voices: every subtitle read aloud, cut from one recording (audio/voices.mp3) ------------------------------ */
-  const ORDER_SHIFT = 4.8;
+  const ORDER_SHIFT = 8.8;
   const voice = (() => {
     // [start, end] in seconds within the recording, in script order: Dani's ten drive lines, her three Range Rover lines,
     // Quinn's two lines and the worker's
-    const SEG = [[0, 5.33], [5.6, 11.08], [11.35, 14.77], [15.03, 20.8], [21.13, 27.73], [28, 32.38], [32.64, 36.33], [36.6, 40.02], [40.26, 45.64], [45.91, 50.36],
-      [50.67, 53.68], [53.88, 55.34], [55.63, 58.47], [58.7, 61.19], [61.5, 71.63], [71.84, 73.64]];
-    const texts = [...LINES.map(l => l[2]), MU_LINES[0][3], MU_LINES[1][3], MU_LINES[3][3], MU_LINES[2][3], ORDER_LINES[0][3], ORDER_LINES[1][3]];
+    const SEG = [[0, 3.78], [3.95, 11.05], [11.48, 14.73], [15.09, 20.77], [21.24, 26.47], [26.8, 32.13], [32.5, 35.93], [36.27, 40.43], [40.8, 45.98], [46.39, 50.5],
+      [50.93, 53.89], [54.25, 55.53], [55.95, 58.71], [59.18, 61.52], [62.21, 73.87], [74.29, 79.3], [79.89, 84.79], [85.13, 89.55], [89.76, 92.05]];
+    const texts = [...LINES.map(l => l[2]), MU_LINES[0][3], MU_LINES[1][3], MU_LINES[3][3], MU_LINES[2][3], ORDER_LINES[0][3], ORDER_LINES[1][3], ...RK_LINES.map(l => l[3])];
     const at = new Map(texts.map((t, i) => [t, SEG[i]]));
     let buf = null, loading = false, cur = null, last = "", until = 0;
     return {
@@ -2757,9 +2838,17 @@ function wrapLines(g, text, maxW) {
         const ac = audio.ac, s = ac.createBufferSource(), g = ac.createGain(); s.buffer = buf; g.gain.value = 1.15; s.connect(g); g.connect(audio.master);
         s.start(0, seg[0], seg[1] - seg[0]); cur = s; until = performance.now() + (seg[1] - seg[0]) * 1000;
       },
-      talking: () => performance.now() < until
+      talking: () => performance.now() < until,
+      secs(text) { const seg = audio && audio.on && buf && at.get(text); return seg ? seg[1] - seg[0] : 0; }
     };
   })();
+  function rocketRumble() {
+    if (!audio || !audio.on) return; const ac = audio.ac, n = ac.sampleRate * 16, b = ac.createBuffer(2, n, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let v = 0; for (let i = 0; i < n; i++) { v = (v + .02 * (Math.random() * 2 - 1)) / 1.02; d[i] = v * 3.2; } }
+    const s = ac.createBufferSource(), lp = ac.createBiquadFilter(), g = ac.createGain(), t0 = ac.currentTime + 2.2; s.buffer = b; lp.type = "lowpass"; lp.frequency.value = 140;
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.55, t0 + 3); g.gain.setValueAtTime(.55, t0 + 8); g.gain.linearRampToValueAtTime(0, t0 + 13.5);
+    s.connect(lp); lp.connect(g); g.connect(audio.master); s.start(t0); s.stop(t0 + 14);
+  }
   function honk() { if (!audio || !audio.on) return; const ac = audio.ac; [415, 523].forEach(f => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(.12, ac.currentTime); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + .28); o.connect(g); g.connect(audio.master); o.start(); o.stop(ac.currentTime + .3); }); }
   // the SVR's supercharged 5.0 V8 going past on the left, synthesised into a stereo buffer when the moment starts (no samples).
   // At the car: cross-plane firing pulses (order 1-5-4-8-6-3-7-2, so each bank fires unevenly, and every cylinder and cycle
@@ -2848,6 +2937,15 @@ function wrapLines(g, text, maxW) {
   let daniYaw = 0, prog = 0, vel = 0, introStart = performance.now(), lastT = performance.now(), frame = 0, idle = 0, lastScroll = 0, chapterIdx = 0, steer = 0, yaw = 0, pitch = 0, passed = false, smoothSpeed = 0;
   addEventListener("scroll", () => { lastScroll = performance.now(); if (scrollY > 30) $("intro").classList.add("off"); }, { passive: true });
   const INTRO_P = .05, INTRO_S = 11; prog = INTRO_P;
+  const heard = new Set(); let heldLine = null;
+  function driveLine(p, now) {
+    if (heldLine && now < heldLine.until) return heldLine.l;
+    if (heldLine) { heard.add(heldLine.l[2]); heldLine = null; }
+    for (const l of LINES) if (p < l[0]) heard.delete(l[2]);
+    const l = LINES.find(l => p >= l[0] && p < l[1] + .02 && !heard.has(l[2]));
+    if (l) heldLine = { l, until: now + 1000 * Math.max(voice.secs(l[2]) + .4, 1.5 + l[2].length / 16) };
+    return l || null;
+  }
 
   function tick(now) {
     const frameMs = now - lastT, dt = Math.min(.05, frameMs / 1000); lastT = now; frame++; const tk0 = performance.now();
@@ -2862,15 +2960,21 @@ function wrapLines(g, text, maxW) {
     // car physics: chase the target with limited accel and top speed
     if (!mu.on && !mu.done && prog < SVR_P && target >= SVR_P && prog > SVR_P - 30 / L) { mu.on = true; mu.t0 = now; svrRoar(); clearSvrLane(prog * L); }
     if (prog < SVR_P - .03) mu.done = false;
+    if (!rkt.on && !rkt.done && !mu.on && prog < RK_P && target >= RK_P && prog > RK_P - 30 / L) { rkt.on = true; rkt.t0 = now; rkt.place = null; rocketRumble(); }
+    if (prog < RK_P - .03) rkt.done = false;
+    const tr = rkt.on ? (rkt.fix != null ? rkt.fix : (now - rkt.t0) / 1000) : -1;
+    if (rkt.on && tr > RK_END) { rkt.on = false; rkt.done = true; rocket.visible = rocketFx.visible = false; }
     const te = mu.on ? (mu.fix != null ? mu.fix : (now - mu.t0) / 1000) : -1;
-    if (mu.on && te > 10.8) { mu.on = false; mu.done = true; svr.visible = false; }
+    if (mu.on && te > 11) { mu.on = false; mu.done = true; svr.visible = false; }
     // the drive-thru: pull up to the window, order, and get handed the CV
     if (!order.on && !order.done && prog > 1 - 1.5 / L && Math.abs(vel) < 2.5) { order.on = true; order.t0 = now; }
     if (order.on && target < 1 - 3 / L) resetOrder();
     if (order.done && prog < .985) resetOrder();
     const to = order.on ? (now - order.t0) / 1000 : -1;
-    let want = clamp((target - prog) * L * 1.6, -62, 62);
+    let want = clamp((target - prog) * L * 1.6, -40, 40);
+    if (heldLine && now < heldLine.until) want = clamp(want, -14, 14); // ease off so the line can be heard and read
     if (mu.on) want = 15; // hold a steady cruise while the moment plays out
+    if (rkt.on) want = 7;
     const acc = Math.sign(want - vel) === Math.sign(vel) || vel === 0 ? 18 : 40;
     vel += clamp(want - vel, -acc * dt, acc * dt);
     prog = clamp(prog + vel * dt / L, 0, 1); if (prog >= 1) vel = Math.min(vel, 0);
@@ -2912,7 +3016,27 @@ function wrapLines(g, text, maxW) {
     const thud = mu.on && te > 5.0 && te < 6.0 ? Math.max(0, 1 - Math.abs(((te - 5.0) % .45) / .45 - 1) * 8) : 0;
     wheelGrp.position.y = .84 - thud * .012;
     const fovBase = clamp(2 * Math.atan(Math.tan(37 * Math.PI / 180) / camera.aspect) * 180 / Math.PI, 60, 100);
-    const fz = fovBase * zoom; if (Math.abs(camera.fov - fz) > .05) { camera.fov = lerp(camera.fov, fz, 1 - Math.exp(-dt * 4)); camera.updateProjectionMatrix(); }
+    rkt.k = rkt.look = 0;
+    if (rkt.on) {
+      if (!rkt.place) { const f = a.tan.clone().setY(0).normalize(), r = a.right.clone().setY(0).normalize();
+        rkt.place = car.position.clone().add(f.multiplyScalar(RK_AT[0])).add(r.multiplyScalar(RK_AT[1])).setY(0); }
+      const h = rkAlt(tr), lit = sstep(.5, 1.1, tr), shake = tr > .5 && tr < 2 ? Math.sin(t * 60) * .04 : 0;
+      rocket.visible = rocketFx.visible = true; rocket.position.copy(rkt.place).setY(1.6 + h); rocket.position.x += shake;
+      const cp = camera.getWorldPosition(tmpV); rocket.rotation.y = Math.atan2(cp.x - rocket.position.x, cp.z - rocket.position.z);
+      rocket.userData.flame.forEach((f, i) => { f.visible = lit > 0; f.material.opacity = lit * (.85 + Math.sin(t * 37 + i * 2) * .15); });
+      rocketFx.position.copy(rkt.place); const grow = sstep(.6, 7, tr), fade = 1 - sstep(12, RK_END, tr);
+      rocketFx.userData.cloud.forEach((c, i) => { const o = c.userData.o, sc = 14 + grow * (40 + i * 3); c.position.set(o[0] * (.4 + grow), o[1] * (.5 + grow), o[2] * (.4 + grow)); c.scale.set(sc, sc * .8, 1); });
+      rocketFx.userData.cloud[0].material.opacity = .85 * sstep(.5, 1.5, tr) * fade;
+      const col = rocketFx.userData.column; col.visible = h > 2; col.scale.set(1 + grow * .6, Math.max(1, h), 1 + grow * .6); col.material.opacity = .8 * fade;
+      rocket.updateMatrixWorld(true); rocket.localToWorld(rkt.win.copy(RK_WIN));
+      rkt.look = sstep(3.6, 4.8, tr) * (1 - sstep(10.4, 11.4, tr));
+      rkt.k = sstep(4.8, 6.4, tr) * (1 - sstep(9.2, 10.4, tr));
+      rkt.fovZ = 2 * Math.atan(1.15 / Math.max(10, cp.distanceTo(rkt.win))) * 180 / Math.PI;
+      rocketGuy.wink(tr > 7.4 && tr < 8.0);
+      rocketGuy.smile.forEach(([m, i]) => { m.morphTargetInfluences[i] = sstep(6.4, 7.2, tr); });
+    }
+    car.visible = rkt.k < .25; // at full zoom nothing in the cabin can get between you and the window
+    const fz = fovBase * zoom; if (rkt.k > .001) { camera.fov = fovBase * Math.pow(rkt.fovZ / fovBase, rkt.k); camera.updateProjectionMatrix(); } else if (Math.abs(camera.fov - fz) > .05) { camera.fov = lerp(camera.fov, fz, 1 - Math.exp(-dt * 4)); camera.updateProjectionMatrix(); }
 
     // camera look
     let ty = userYaw + hoverX * -.25, tp = userPitch + hoverY * -.08 - .05 + (camera.aspect < 1 ? .1 : 0);
@@ -2926,15 +3050,18 @@ function wrapLines(g, text, maxW) {
     if (!dragging) { userYaw *= .96; userPitch *= .96; }
     yaw = lerp(yaw, ty, 1 - Math.exp(-dt * 3.2)); pitch = lerp(pitch, tp, 1 - Math.exp(-dt * 3.2));
     head.rotation.set(pitch + thud * .03, yaw, thud * .01, "YXZ");
+    // the rocket: turn to it, then the zoom holds its window dead centre
+    camera.quaternion.set(0, 0, 0, 1);
+    if (rkt.look > 0) { head.updateMatrixWorld(true); const q0 = camera.quaternion.clone(); camera.lookAt(rkt.win); camera.quaternion.copy(q0.slerp(camera.quaternion, rkt.look)); }
 
     // friend
-    const muLine = mu.on ? MU_LINES.find(l => te >= l[0] && te < l[1]) : order.on ? ORDER_LINES.find(l => to >= l[0] && to < l[1]) : null;
-    const introE = (now - introStart) / 1000, opening = prog < INTRO_P + .004 && !document.body.classList.contains("entering") ? (introE > 1 && introE < 6.6 ? LINES[0] : introE > 7 && introE < 12.6 ? LINES[1] : null) : null;
-    const line = muLine ? [0, 0, muLine[3], muLine[2]] : order.on || order.done ? null : opening || LINES.find(l => prog >= l[0] && prog < l[1]);
+    const muLine = rkt.on ? RK_LINES.find(l => tr >= l[0] && tr < l[1]) : mu.on ? MU_LINES.find(l => te >= l[0] && te < l[1]) : order.on ? ORDER_LINES.find(l => to >= l[0] && to < l[1]) : null;
+    const introE = (now - introStart) / 1000, opening = prog < INTRO_P + .004 && !document.body.classList.contains("entering") ? (introE > 1 && introE < 5 ? LINES[0] : introE > 5.4 && introE < 12.7 ? LINES[1] : null) : null;
+    const line = muLine ? [0, 0, muLine[3], muLine[2]] : rkt.on || order.on || order.done ? null : opening || driveLine(prog, now);
     voice.say(line ? line[2] : "");
     const friendTalks = line && line[3] !== "Quinn" && line[3] !== "worker";
     const looking = yaw < -.8;
-    const headYaw = order.on ? 1.05 : mu.on && te > .3 && te < 4.6 ? .95 : looking ? 1.15 : friendTalks ? .6 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
+    const headYaw = order.on ? 1.05 : rkt.on && tr > .3 && tr < 10.4 ? .3 : mu.on && te > .3 && te < 4.6 ? .95 : looking ? 1.15 : friendTalks ? .6 : (Math.sin(t * .23) > .55 ? -.7 : .05 + Math.sin(t * .7) * .08);
     daniYaw = lerp(daniYaw, headYaw, 1 - Math.exp(-dt * 3));
     dani.turn(daniYaw, Math.sin(t * 1.9) * .025 * Math.min(1, speed / 10) + (friendTalks ? Math.sin(t * 6.5) * Math.sin(t * 2.3) * .06 : 0));
     dani.t.value = t; dani.talk = !!friendTalks; dani.wind.value = .2 + Math.min(1, smoothSpeed / 22) * .8;
@@ -3002,13 +3129,13 @@ function wrapLines(g, text, maxW) {
     $("clock").textContent = `${hh}:${String(mi).padStart(2, "0")} PM`;
     const subs = $("subs");
     if (line) { const html = `<b>${esc(line[3] === "Quinn" ? CV.name : line[3] === "worker" ? "Byte Burger" : CV.friend)}:</b> ${esc(line[2])}`; if (subs.dataset.l !== line[2]) { subs.innerHTML = html; subs.dataset.l = line[2]; } subs.classList.add("on"); } else subs.classList.remove("on");
-    if ((mu.on && te < 6.5) || order.on || !cv.hidden) { if (cardId) { card.classList.remove("on"); cardId = null; } } else setCard(prog);
+    if ((mu.on && te < 6.5) || rkt.on || order.on || !cv.hidden) { if (cardId) { card.classList.remove("on"); cardId = null; } } else setCard(prog);
     const still = now - lastScroll > 2500 && speed < 1 && introT >= 1 && prog < .97 && cv.hidden;
     $("hint").classList.toggle("on", still);
     if (introT >= 1 && prog > INTRO_P + .01) $("intro").classList.add("off");
     const talk = voice.talking();
-    if (audio && audio.on && frame % 2 === 0) audio.update(smoothSpeed, accelNow, (mu.on && te < 7.5) || order.on || talk);
-    radio.duck((mu.on && te < 7.5) || order.on || talk);
+    if (audio && audio.on && frame % 2 === 0) audio.update(smoothSpeed, accelNow, (mu.on && te < 7.5) || rkt.on || order.on || talk);
+    radio.duck((mu.on && te < 7.5) || rkt.on || order.on || talk, prog < INTRO_P + .004 && !document.body.classList.contains("entering") && (now - introStart) / 1000 < 13);
 
     // the full-screen CV covers the scene, so skip drawing while it is open
     const tk1 = performance.now();
@@ -3029,7 +3156,7 @@ function wrapLines(g, text, maxW) {
     // draw straight after the resize, so the cleared canvas is never shown as a blank frame
     if (np !== pr) { pr = np; renderer.setPixelRatio(pr); resize(); drawScene(); }
   }
-  window.__drive = { mu: te => { mu.on = true; mu.fix = te; }, jump: u => { scrollTo(0, u * (document.documentElement.scrollHeight - innerHeight)); prog = scrollToProgress(u); vel = 0; introStart = -1e9; },
+  window.__drive = { mu: te => { mu.on = true; mu.fix = te; }, rk: te => { if (!rkt.on) { rkt.on = true; rkt.place = null; } rkt.fix = te; }, jump: u => { scrollTo(0, u * (document.documentElement.scrollHeight - innerHeight)); prog = scrollToProgress(u); vel = 0; introStart = -1e9; },
     order: () => order, restart: () => restart(), info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, pr, js: +cost.js.toFixed(1), gl: +cost.gl.toFixed(1) }), scene, dbg: () => ({ cam: camera.getWorldPosition(new THREE.Vector3()).toArray(), car: car.position.toArray(), diner: diner.position.toArray(), FW: FW.toArray(), RT: RT.toArray(), worker: worker.ch && worker.ch.root.getWorldPosition(new THREE.Vector3()).toArray() }) };
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   requestAnimationFrame(t => { lastT = t; introStart = t; tick(t); setTimeout(() => $("loading").classList.add("off"), 250); });
